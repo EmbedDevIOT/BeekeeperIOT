@@ -15,6 +15,9 @@
 #include <DallasTemperature.h>
 #include "HX711.h"
 #include <EncButton.h>
+#include <GyverOLED.h>
+
+#define UARTSpeed 115200
 
 #define WiFi_
 
@@ -150,35 +153,6 @@ extern GPS GPSTime;
 //=======================================================================
 
 //=======================================================================
-struct MechanicalClock
-{
-  byte Hour = 0;
-  byte Minute = 0;
-  byte Second = 0;
-  byte Hold_time = 0;
-  byte Polarity = 0;
-  byte Start = 0;
-  byte ClockST = 2;
-  byte Volt = 24;
-};
-extern MechanicalClock SecondaryClock;
-//=======================================================================
-struct MechanicalClock2
-{
-  byte Hour = 0;
-  byte Minute = 0;
-  byte Second = 0;
-  byte Hold_time = 0;
-  byte Polarity = 0;
-  byte Start = 0;
-  byte StopButton = 1;
-  byte ClockST = 2;
-  byte Volt = 24;
-};
-extern MechanicalClock2 SecondaryClock2;
-//=======================================================================
-
-//=======================================================================
 struct Flag
 {
   bool Start : 1;
@@ -190,15 +164,10 @@ extern Flag FlagState;
 //============================================================================
 void SystemInit(void);     //  System Initialisation (variables and structure)
 void ShowInfoDevice(void); //  Show information or this Device
-void ShowStartInfoORDevice(void);
 void GetChipID(void);
 String GetMacAdr();
 void CheckSystemState(void);
-void CheckChargeState(void);
-int CheckLightSensor(void);
 void DebugControl(void);
 void SystemFactoryReset(void);
-void SetStateGPS(void);
-void ShowFlashSave(void);
 //============================================================================
 #endif // _Config_H
