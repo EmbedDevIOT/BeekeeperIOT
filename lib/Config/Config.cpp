@@ -4,25 +4,6 @@
 /************************ System Initialisation **********************/
 void SystemInit(void)
 {
-  FlagState.IDLE = true;
-  FlagState.GPSSave = true;
-  FlagState.Start = true;
-  FlagState.OnceGPS = true;
-  FlagState.TimState = false;
-  FlagState.Clock1EN = true;
-  FlagState.GPSEN = false;
-  FlagState.LedR = false;
-  FlagState.LedG = false;
-  FlagState.LedB = false;
-  FlagState.LedR = true;
-  FlagState.LedG = true;
-  FlagState.LedB = true;
-  FlagState.SaveFlash = false;
-  FlagState.rs = false;
-  FlagState.Debug = true;
-  FlagState.CurDebug = false;
-  FlagState.WiFiEnable = true;
-
   GetChipID();
 }
 /*******************************************************************************************************/
@@ -95,145 +76,10 @@ String GetMacAdr()
 }
 /*******************************************************************************************************/
 
-/************************************ Set State GPS  ***************************************************/
-void SetStateGPS()
-{
-  if (Config.GPSMode == GPS_ALWAYS)
-  {
-    HWConfig.GPSPWR = ENABLE;
-    Config.GPSSynh = true;
-  }
-  else if (FlagState.OnceGPS && Config.GPSMode == GPS_ONCE)
-  {
-    FlagState.OnceGPS = false;
-    HWConfig.GPSPWR = DISABLE;
-    GPSTime.Fix = false;
-    GPSTime.Age = 1000;
-    GPSTime.Sattelite = 0;
-    GPSTime.Hour = 0;
-    GPSTime.Minute = 0;
-    GPSTime.Second = 0;
-    Serial.println(F("GPS_ONCE_PWR_OFF"));
-  }
-  else if ((Config.GPSMode == GPS_ONCE) && (CheckTimeEnableGPS(PrimaryClock.hour, PrimaryClock.minute, Config.GPSStartHour, Config.GPSStartMin)))
-  {
-    HWConfig.GPSPWR = ENABLE;
-    Config.GPSSynh = true;
-    Serial.println(F("GPS_ONCE_PWR_ON"));
-  }
-  else if (Config.GPSMode == GPS_OFF)
-  {
-    HWConfig.GPSPWR = DISABLE;
-    GPSTime.Fix = false;
-    GPSTime.Age = 1000;
-    GPSTime.Sattelite = 0;
-    GPSTime.Hour = 0;
-    GPSTime.Minute = 0;
-    GPSTime.Second = 0;
-  }
-}
-/*******************************************************************************************************/
-
 /*******************************************************************************************************/
 void CheckSystemState()
 {
-
-  // if ((!HWConfig.GPSPWR) && (FlagState.GPSEN))
-  // {
-  //   GPS_init(LOW);
-  //   Serial.println("GPS: disable");
-  //   FlagState.GPSEN = false;
-  // }
-  // else if ((HWConfig.GPSPWR) && (!FlagState.GPSEN))
-  // {
-  //   GPS_init(HIGH);
-  //   Serial.println("GPS: enable");
-  //   FlagState.GPSEN = true;
-  // }
-
-  // Check and toogle status RS485
-  // if ((!Config.RSMode) && (FlagState.rs))
-  // {
-  //   FlagState.rs = false;
-  //   Serial.print("RS485 disable");
-  // }
-  // else if ((Config.RSMode) && (!FlagState.rs))
-  // {
-  //   FlagState.rs = true;
-  //   Serial.print("RS485 enable");
-  // }
-
-  // Check and toogle status pin IN1 driver L293DD
-  if ((!HWConfig.DrIN1) && (FlagState.in1))
-  {
-    FlagState.in1 = false;
-    digitalWrite(IN1, LOW);
-    Serial.println("Driver L293: IN1 disabled");
-  }
-  else if ((HWConfig.DrIN1) && (!FlagState.in1))
-  {
-    FlagState.in1 = true;
-    digitalWrite(IN1, HIGH);
-    Serial.println("Driver L293: IN1 enabled");
-  }
-
-  // Check and toogle status pin IN2 driver L293DD
-  if ((!HWConfig.DrIN2) && (FlagState.in2))
-  {
-    FlagState.in2 = false;
-    digitalWrite(IN2, LOW);
-    Serial.println("Driver L293: IN2 disabled");
-  }
-  else if ((HWConfig.DrIN2) && (!FlagState.in2))
-  {
-    FlagState.in2 = true;
-    digitalWrite(IN2, HIGH);
-    Serial.println("Driver L293: IN2 enabled");
-  }
-
-  // Check and toogle status pin IN3 driver L293DD
-  if ((!HWConfig.DrIN3) && (FlagState.in3))
-  {
-    FlagState.in3 = false;
-    digitalWrite(IN3, LOW);
-    Serial.println("Driver L293: IN3 disabled");
-  }
-  else if ((HWConfig.DrIN3) && (!FlagState.in3))
-  {
-    FlagState.in3 = true;
-    digitalWrite(IN3, HIGH);
-    Serial.println("Driver L293: IN3 enabled");
-  }
-
-  // Check and toogle status pin IN4 driver L293DD
-  if ((!HWConfig.DrIN4) && (FlagState.in4))
-  {
-    FlagState.in4 = false;
-    digitalWrite(IN4, LOW);
-    Serial.println("Driver L293: IN4 disabled");
-  }
-  else if ((HWConfig.DrIN4) && (!FlagState.in4))
-  {
-    FlagState.in4 = true;
-    digitalWrite(IN4, HIGH);
-    Serial.println("Driver L293: IN4 enabled");
-  }
-
-  // Check and toogle status pin IN4 driver L293DD
-  // if ((!HWConfig.DCEnable) && (FlagState.dcen))
-  // {
-  //   FlagState.en = false;
-  //   digitalWrite(IN4, LOW);
-  //   Serial.println("Driver L293: IN4 disabled");
-  // }
-  // else if ((HWConfig.DrIN4) && (!FlagState.in4))
-  // {
-  //   FlagState.in4 = true;
-  //   digitalWrite(IN4, HIGH);
-  //   Serial.println("Driver L293: IN4 enabled");
-  // }
 }
-
 /*******************************************************************************************************/
 void CheckChargeState()
 {

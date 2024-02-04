@@ -3,22 +3,18 @@
 
 #include <Arduino.h>
 
-// #define OS_BENCH
 
-// #include "GyverOS.h"
-#include "SystemProcessor.h"
-#include "ADC.h"
-#include "ClockProcessor.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ElegantOTA.h>
+#include <ArduinoJson.h>
 #include "SPIFFS.h"
 #include <microDS3231.h>
+#include <microDS18B20.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include "HX711.h"
 #include <EncButton.h>
-#include "TinyGPSPlus.h"
-#include <ArduinoJson.h>
-#include "NMEA.h"
-#include "ACS712.h"
 
 #define WiFi_
 
@@ -26,7 +22,6 @@
 #define Client 0
 #define AccessPoint 1
 #define WorkNET
-
 
 #define DEBUG
 // #define I2C_SCAN
@@ -36,18 +31,10 @@
 
 #define BAT_MIN 30
 
-#define LED_GREEN_OFF PCF8574PowerEN(LED_GR, !LOW)
-#define LED_GREEN_ON PCF8574PowerEN(LED_GR, !LOW)
-
-#define GPS_S_POINT_1 (FlagState.Start == 1)
-#define GPS_S_POINT_2 ((GPSTime.LocalHour == 14) && (GPSTime.Minute == 35) && (GPSTime.Second == 00))
-
-// #define GPS_ONCE_PREP (PrimaryClock.hour == Config.GPSStartHour) && (PrimaryClock.minute == (Config.GPSStartMin - 1))
-
 //=======================================================================
 extern MicroDS3231 RTC;
-extern DateTime PrimaryClock;
-extern ACS712 ACS;
+extern DateTime Clock;
+
 //=======================================================================
 
 //========================== ENUMERATION ================================
@@ -58,13 +45,6 @@ enum OS_T
   T_300MS,
   T_500MS,
   T_1000MS
-};
-
-enum GPSMODE 
-{
-  GPS_OFF = 0,
-  GPS_ONCE, 
-  GPS_ALWAYS
 };
 
 enum CHANNEL
@@ -98,34 +78,17 @@ struct GlobalConfig
   String chipID = "";
   String MacAdr = "";
   String NTPServer = "pool.ntp.org";
-  String APSSID = "ClockStation";
+  String APSSID = "Beekeeper";
   String APPAS = "CS0120rTra";
   // String Ssid = "Keenetic-L3-2.4-prg"; // SSID Wifi network
   // String Password = "QFCxfXMA3";       // Passwords WiFi network
   String Ssid = "AECorp2G";      // SSID Wifi network
   String Password = "Ae19co90$"; // Paswords WiFi network
-  char user[5] = "pepa";         //
-  char user_pass[7] = "qWe123";
-  byte usok = 0;
   int TimeZone = 0;
-  byte LedStartHour = 18;
-  byte LedStartMinute = 30;
-  byte LedFinishHour = 18;
-  byte LedFinishMinute = 30;
-  byte GPSStartHour = 01;
-  byte GPSStartMin = 00;
-  byte GPSStartSec = 00;
-  byte GPSSynh = 1;
-  byte LedOnOFF = 1;    // Флаг старта работы подсветки
-  byte LedON = 0;
-  int senslim = 1500;   // порог срабатывания чувствительности датчика света
-  int i_sens = 0;     // sensetivity current sensor
-  int i_cor = 1680;     // error current sensor
-  int iLimit = 150;     // Current Protect
   byte IP1 = 192;
   byte IP2 = 168;
-  byte IP3 = 1;
-  byte IP4 = 31;
+  byte IP3 = 4;
+  byte IP4 = 1;
   byte GW1 = 192;
   byte GW2 = 168;
   byte GW3 = 1;
@@ -136,8 +99,6 @@ struct GlobalConfig
   byte MK4 = 0;
   byte WiFiMode = 0; // Режим работы WiFi
   long WiFiPeriod = 0; 
-  byte RSMode = 1;   // Режим работы RS
-  byte GPSMode = 1;
   byte BTNMode = 3;
 };
 extern GlobalConfig Config;
@@ -221,27 +182,6 @@ extern MechanicalClock2 SecondaryClock2;
 struct Flag
 {
   bool Start : 1;
-  bool GPSSave : 1;
-  bool OnceGPS : 1;
-  bool IDLE : 1;
-  bool Clock1EN : 1;
-  bool GoHome : 1;
-  bool GPSEN : 1;
-  bool TimState : 1;
-  bool LedR : 1;
-  bool LedG : 1;
-  bool LedB : 1;
-  bool SaveFlash : 1;
-  bool rs : 1;
-  bool in1 : 1;
-  bool in2 : 1;
-  bool in3 : 1;
-  bool in4 : 1;
-  bool dcen : 1;
-  bool dcvcc : 1;
-  bool BackLight : 1;
-  bool Debug: 1;
-  bool CurDebug: 1;
   bool WiFiEnable: 1;
 };
 extern Flag FlagState;
