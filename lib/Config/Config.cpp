@@ -12,7 +12,7 @@ void SystemInit(void)
 void ShowInfoDevice(void)
 {
   Serial.println(F("Starting..."));
-  Serial.println(F("ClockStation rev.0120"));
+  Serial.println(F("Beekeeper"));
   Serial.print(F("SN:"));
   Serial.println(Config.Serial);
   Serial.print(F("fw_date:"));
@@ -72,24 +72,6 @@ void DebugControl()
 /*******************************************************************************************************/
 void SystemFactoryReset()
 {
-  Config.TimeZone = 3;
-  Config.WiFiMode = AccessPoint;
-  Config.APSSID = "ClockStation";
-  Config.APPAS = "CS0120rTra";
-  Config.IP1 = 192;
-  Config.IP2 = 168;
-  Config.IP3 = 1;
-  Config.IP4 = 31;
-  Config.GW1 = 192;
-  Config.GW2 = 168;
-  Config.GW3 = 1;
-  Config.GW4 = 1;
-  Config.MK1 = 255;
-  Config.MK2 = 255;
-  Config.MK3 = 255;
-  Config.MK4 = 0;
-  HWConfig.MinBatLimit = 30;
-  HWConfig.PulseFast = 300;
-  HWConfig.PulseNormal = 500;
+  
 }
 /*******************************************************************************************************/

@@ -3,21 +3,55 @@
 #define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 5        /* Time ESP32 will go to sleep (in seconds) */
 
-#define OLED_SPI_SPEED 8000000ul
+// GPIO PINs
+#define SET_PIN 18 // кнопкa Выбор
+#define PL_PIN 19  // кнопкa Плюс
+#define MN_PIN 5   // кнопкa Минус
 
+#define RELAY 23 // Реле
+
+#define DS_SENS 4 // ds18b20
+
+#define TX_PIN 17 // tx
+#define RX_PIN 16 // rx
+
+#define HX_DT 25  // tx
+#define HX_CLK 26 // rx
+
+GlobalConfig Config;
+
+// номер телефона в международном формате
+String phone = "";
+// часы
+// DS3231 Clock;
+bool h12 = false;
+bool PM;
+bool Century = false;
+int16_t year, month, date, dow, hrs, mins, secs;
+int16_t yearSet, monthSet, dateSet, dowSet, hourSet, minSet, secSet;
+
+#define OLED_SPI_SPEED 8000000ul
 RTC_DATA_ATTR int bootCount = 0;
+
 GyverOLED<SSD1306_128x64, OLED_NO_BUFFER> oled;
+HX711 scale; //
+SoftwareSerial SIM800(TX_PIN, RX_PIN);
+OneWire DS(DS_SENS);
+#define SEALEVELPRESSURE_HPA (1013.25)
+// Adafruit_BME280 bme;
 
 double vectors[8][3] = {{20, 20, 20}, {-20, 20, 20}, {-20, -20, 20}, {20, -20, 20}, {20, 20, -20}, {-20, 20, -20}, {-20, -20, -20}, {20, -20, -20}};
 double perspective = 100.0f;
 int deltaX, deltaY, deltaZ, iter = 0;
 uint32_t timer;
 
-int translateX(double x, double z);
-void rotateX(int angle);
-void rotateY(int angle);
-void rotateZ(int angle);
-void drawVectors();
+void StartingInfo();
+
+// int translateX(double x, double z);
+// void rotateX(int angle);
+// void rotateY(int angle);
+// void rotateZ(int angle);
+// void drawVectors();
 /*
 Method to print the reason by which ESP32
 has been awaken from sleep
@@ -53,45 +87,31 @@ void print_wakeup_reason()
 
 void setup()
 {
-  oled.init();      // инициализация
-  oled.clear();     // очистка
-  oled.setScale(2); // масштаб текста (1..4)
-  // oled.home();      // курсор в 0,0
-  oled.setCursor(10, 0);
-  oled.print("Beekeeper");
-  delay(1000);
-  oled.setScale(1);
-  // курсор на начало 3 строки
-  oled.setCursor(0, 3);
-  oled.print("starting...");
-  // курсор на (20, 50)
-  oled.setCursorXY(20, 50);
-  // float pi = 3.14;
-  // oled.print("PI = ");
-  // oled.print(pi);
+  Config.firmware = "0.2";
+  Wire.begin();
+  scale.begin(HX_DT, HX_CLK); // HX
+  oled.init();                // инициализация
+  StartingInfo();
 }
 
 void loop()
 {
-  // oled.clear();
-  // oled.home();
-  // oled.print(1000 / timer);
-
-  // timer = millis();
-  // drawVectors();
-  // if (iter == 0)
-  // {
-  //   deltaX = random(7) - 3;
-  //   deltaY = random(7) - 3;
-  //   deltaZ = random(7) - 3;
-  //   iter = random(250) + 5;
-  // }
-  // rotateX(deltaX);
-  // rotateY(deltaY);
-  // rotateZ(deltaZ);
-  // iter--;
-  // oled.update();
-  // timer = millis() - timer;
+    if (scale.is_ready()) {
+    scale.set_scale();    
+    Serial.println("Tare... remove any weights from the scale.");
+    delay(5000);
+    scale.tare();
+    Serial.println("Tare done...");
+    Serial.print("Place a known weight on the scale...");
+    delay(5000);
+    long reading = scale.get_units(10);
+    Serial.print("Result: ");
+    Serial.println(reading);
+  } 
+  else {
+    Serial.println("HX711 not found.");
+  }
+  delay(1000);
 }
 
 int translateX(double x, double z)
@@ -163,4 +183,37 @@ void drawVectors()
   oled.line(translateX(vectors[1][0], vectors[1][2]), translateY(vectors[1][1], vectors[1][2]), translateX(vectors[5][0], vectors[5][2]), translateY(vectors[5][1], vectors[5][2]));
   oled.line(translateX(vectors[2][0], vectors[2][2]), translateY(vectors[2][1], vectors[2][2]), translateX(vectors[6][0], vectors[6][2]), translateY(vectors[6][1], vectors[6][2]));
   oled.line(translateX(vectors[3][0], vectors[3][2]), translateY(vectors[3][1], vectors[3][2]), translateX(vectors[7][0], vectors[7][2]), translateY(vectors[7][1], vectors[7][2]));
+}
+
+void StartingInfo()
+{
+  oled.clear();     // очистка
+  oled.setScale(2); // масштаб текста (1..4)
+  // oled.home();      // курсор в 0,0
+  oled.setCursor(10, 0);
+  oled.print("Beekeeper");
+  delay(1000);
+  oled.setScale(1);
+  // курсор на начало 3 строки
+  oled.setCursor(0, 3);
+  oled.print("starting...");
+
+  oled.clear();
+  oled.update();
+  byte textPos1 = 8;
+  byte textPos2 = 32;
+
+  oled.createBuffer(5, 0, 66, textPos2 + 8 + 2);
+
+  oled.roundRect(5, textPos1 - 4, 65, textPos1 + 8 + 2, OLED_STROKE);
+  oled.setCursorXY(10, textPos1);
+  oled.print("SET MODE");
+
+  oled.roundRect(5, textPos2 - 4, 65, textPos2 + 8 + 2, OLED_FILL);
+  oled.setCursorXY(10, textPos2);
+  oled.invertText(true);
+  oled.print("LOL KEK");
+
+  oled.sendBuffer();
+  oled.update();
 }
