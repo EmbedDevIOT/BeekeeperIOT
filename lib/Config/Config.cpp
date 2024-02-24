@@ -14,7 +14,7 @@ void ShowInfoDevice(void)
   Serial.println(F("Starting..."));
   Serial.println(F("Beekeeper"));
   Serial.print(F("SN:"));
-  Serial.println(Config.Serial);
+  Serial.println(Config.sn);
   Serial.print(F("fw_date:"));
   Serial.println(Config.fwdate);
   Serial.println(Config.firmware);
@@ -72,6 +72,6 @@ void DebugControl()
 /*******************************************************************************************************/
 void SystemFactoryReset()
 {
-  
+
 }
 /*******************************************************************************************************/

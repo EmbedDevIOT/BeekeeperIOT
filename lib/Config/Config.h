@@ -11,14 +11,17 @@
 #include <microDS3231.h>
 #include <microDS18B20.h>
 #include "SoftwareSerial.h"
+#include <Wire.h>
+#include "Adafruit_BME280.h"
+#include <Adafruit_Sensor.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+
 #include "HX711.h"
 #include <EncButton.h>
 #include <GyverOLED.h>
 
 #define UARTSpeed 115200
-
 
 #define WiFi_
 
@@ -35,8 +38,6 @@
 
 #define BAT_MIN 30
 
-
-
 //=======================================================================
 extern MicroDS3231 RTC;
 extern DateTime Clock;
@@ -50,13 +51,6 @@ enum OS_T
   T_300MS,
   T_500MS,
   T_1000MS
-};
-
-enum CHANNEL
-{
-  CH_A = 1,
-  CH_B,
-  CH_AB
 };
 
 enum ClockST
@@ -78,38 +72,66 @@ enum Clicks
 struct GlobalConfig
 {
   int sn = 0;
-  String firmware = ""; // accepts from setup()
-  String fwdate = "";
+
+  String phone = "+79524645894"; // номер телефона в международном формате
+  String firmware = "";          // accepts from setup()
+  // System_Information
+  String fwdate = "24.02.2024";
   String chipID = "";
   String MacAdr = "";
-  String APSSID = "Beekeeper";
-  String APPAS = "CS0120rTra";
 
+  String APSSID = "Beekeeper";
+  String APPAS = "12345678";
   String Ssid = "AECorp2G";      // SSID Wifi network
   String Password = "Ae19co90$"; // Paswords WiFi network
+
   int TimeZone = 0;
   byte WiFiMode = 0; // Режим работы WiFi
-  long WiFiPeriod = 0; 
+  long WiFiPeriod = 0;
   byte BTNMode = 3;
 };
 extern GlobalConfig Config;
 //=======================================================================
 
 //=======================================================================
-struct HardwareConfig
+struct SYTM
 {
-
+  int16_t year = 0;
+  int16_t month = 0;
+  int16_t date = 0;
+  int16_t day;
+  int16_t hour;
+  int16_t min;
+  int16_t yearSet;
+  int16_t monthSet;
+  int16_t dateSet;
+  int16_t daySet;
+  int16_t daySet;
 };
-extern HardwareConfig HWConfig;
+extern SYTM System;
 //=======================================================================
 
+struct SNS
+{
+  float dsT = 0.0;  // Temperature DS18B20
+  float bmeT = 0.0; // Temperature BME280
+  float bmeH = 0.0; // Humidity   BME280
+  int bmeP = 0;     // Pressure   BME280
+  float calibr_factor = -0.77;
+  float units = 0.0;
+  float grams = 0.0;
+  float g_eeprom = 0.0;
+  float grms;
+  float g_obnul = 0;
+};
+extern SNS sensors;
 //=======================================================================
 
 //=======================================================================
 struct Flag
 {
   bool Start : 1;
-  bool WiFiEnable: 1;
+  bool WiFiEnable : 1;
 };
 extern Flag FlagState;
 //============================================================================

@@ -4,31 +4,23 @@
 #define TIME_TO_SLEEP 5        /* Time ESP32 will go to sleep (in seconds) */
 
 // GPIO PINs
-#define SET_PIN 18 // кнопкa Выбор
-#define PL_PIN 19  // кнопкa Плюс
-#define MN_PIN 5   // кнопкa Минус
+#define EB_CLICK_TIME 100 // таймаут ожидания кликов (кнопка)
+#define SET_PIN 18        // кнопкa Выбор
+#define PL_PIN 19         // кнопкa Плюс
+#define MN_PIN 5          // кнопкa Минус
 
 #define RELAY 23 // Реле
 
-#define DS_SENS 4 // ds18b20
+#define DS_SNS 4 // ds18b20
 
 #define TX_PIN 17 // tx
 #define RX_PIN 16 // rx
 
-#define HX_DT 25  // tx
+#define HX_DT  25  // HXT
 #define HX_CLK 26 // rx
 
 GlobalConfig Config;
-
-// номер телефона в международном формате
-String phone = "";
-// часы
-// DS3231 Clock;
-bool h12 = false;
-bool PM;
-bool Century = false;
-int16_t year, month, date, dow, hrs, mins, secs;
-int16_t yearSet, monthSet, dateSet, dowSet, hourSet, minSet, secSet;
+SNS sensors;
 
 #define OLED_SPI_SPEED 8000000ul
 RTC_DATA_ATTR int bootCount = 0;
@@ -36,9 +28,14 @@ RTC_DATA_ATTR int bootCount = 0;
 GyverOLED<SSD1306_128x64, OLED_NO_BUFFER> oled;
 HX711 scale; //
 SoftwareSerial SIM800(TX_PIN, RX_PIN);
-OneWire DS(DS_SENS);
+OneWire DS(DS_SNS);
+
+Button btUP(PL_PIN, INPUT_PULLUP);
+Button btSET(SET_PIN, INPUT_PULLUP);
+Button btDWN(MN_PIN, INPUT_PULLUP);
+
 #define SEALEVELPRESSURE_HPA (1013.25)
-// Adafruit_BME280 bme;
+Adafruit_BME280 bme; // I2C BUS
 
 double vectors[8][3] = {{20, 20, 20}, {-20, 20, 20}, {-20, -20, 20}, {20, -20, 20}, {20, 20, -20}, {-20, 20, -20}, {-20, -20, -20}, {20, -20, -20}};
 double perspective = 100.0f;
@@ -46,6 +43,8 @@ int deltaX, deltaY, deltaZ, iter = 0;
 uint32_t timer;
 
 void StartingInfo();
+void ButtonHandler();
+void BeekeeperConroller();
 
 // int translateX(double x, double z);
 // void rotateX(int angle);
@@ -87,31 +86,59 @@ void print_wakeup_reason()
 
 void setup()
 {
-  Config.firmware = "0.2";
-  Wire.begin();
+  Serial.begin(UARTSpeed);
+  Config.firmware = "0.3";
+  Serial.printf("firmware: %s", Config.firmware);
+  Serial.println();
+  // Wire.begin();
   scale.begin(HX_DT, HX_CLK); // HX
   oled.init();                // инициализация
+  Wire.begin();
+  delay(20);
+
+  bool status;
+  status = bme.begin(0x76);
+  if (!status)
+  {
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
+    while (1)
+      ;
+  }
+  bme.setSampling(Adafruit_BME280::MODE_FORCED,
+                  Adafruit_BME280::SAMPLING_X1,
+                  Adafruit_BME280::SAMPLING_X1,
+                  Adafruit_BME280::SAMPLING_X1,
+                  Adafruit_BME280::FILTER_OFF);
+
+  bme.takeForcedMeasurement();
+  uint32_t Pressure = bme.readPressure();
+  delay(20);
+
   StartingInfo();
 }
 
 void loop()
 {
-    if (scale.is_ready()) {
-    scale.set_scale();    
-    Serial.println("Tare... remove any weights from the scale.");
-    delay(5000);
-    scale.tare();
-    Serial.println("Tare done...");
-    Serial.print("Place a known weight on the scale...");
-    delay(5000);
-    long reading = scale.get_units(10);
-    Serial.print("Result: ");
-    Serial.println(reading);
-  } 
-  else {
-    Serial.println("HX711 not found.");
-  }
-  delay(1000);
+  ButtonHandler();
+  // task_1000();
+  // if (scale.is_ready())
+  // {
+  //   scale.set_scale();
+  //   Serial.println("Tare... remove any weights from the scale.");
+  //   delay(5000);
+  //   scale.tare();
+  //   Serial.println("Tare done...");
+  //   Serial.print("Place a known weight on the scale...");
+  //   delay(5000);
+  //   long reading = scale.get_units(10);
+  //   Serial.print("Result: ");
+  //   Serial.println(reading);
+  // }
+  // else
+  // {
+  //   Serial.println("HX711 not found.");
+  // }
+  // delay(1000);
 }
 
 int translateX(double x, double z)
@@ -216,4 +243,101 @@ void StartingInfo()
 
   oled.sendBuffer();
   oled.update();
+}
+
+void ButtonHandler()
+{
+  uint16_t value = 0;
+  static bool btnst = false;
+
+  btSET.tick();
+  btUP.tick();
+  btDWN.tick();
+
+  while (btSET.busy())
+  {
+    btSET.tick();
+    if (btSET.click())
+    {
+      Serial.println("State: BTN_ SET_ Click");
+    }
+  }
+
+  while (btUP.busy())
+  {
+    btUP.tick();
+    if (btUP.hasClicks(1))
+    {
+      Serial.println("State: BTN_UP_ Click");
+    }
+  }
+
+  while (btDWN.busy())
+  {
+    btDWN.tick();
+    if (btDWN.hasClicks(1))
+    {
+      Serial.println("State: BTN_DWN_ Click");
+    }
+  }
+}
+
+// Getting Time and Date from RTC
+void GetClock()
+{
+  System.hour = RTC.getHours(h12, PM);
+  System.min = Clock.getMinute();
+  year = Clock.getYear();
+  month = Clock.getMonth(Century);
+  date = Clock.getDate();
+}
+
+// Get Data from BME Sensor
+void GetBme()
+{
+  bme.takeForcedMeasurement();
+  sensors.bmeT = bme.readTemperature();
+  sensors.bmeH = bme.readHumidity();
+  sensors.bmeP = (float)bme.readPressure() * 0.00750062;
+}
+
+String waitResponse()
+{
+  String _resp = "";
+  long _timeout = millis() + 10000;
+  while (!SIM800.available() && millis() < _timeout)
+  {
+  };
+  if (SIM800.available())
+  {
+    _resp = SIM800.readString();
+  }
+  else
+  {
+    Serial.println("Timeout...");
+  }
+  return _resp;
+}
+
+String sendATCommand(String cmd, bool waiting)
+{
+  String _resp = "";
+  Serial.println(cmd);
+  SIM800.println(cmd);
+  if (waiting)
+  {
+    _resp = waitResponse();
+    if (_resp.startsWith(cmd))
+    {
+      _resp = _resp.substring(_resp.indexOf("\r", cmd.length()) + 2);
+    }
+    Serial.println(_resp);
+  }
+  return _resp;
+}
+
+void sendSMS(String phone, String message)
+{
+  sendATCommand("AT+CMGS=\"" + phone + "\"", true);
+  sendATCommand(message + "\r\n" + (String)((char)26), true);
 }
