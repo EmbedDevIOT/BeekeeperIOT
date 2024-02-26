@@ -54,19 +54,12 @@ enum OS_T
   T_1000MS
 };
 
-enum ClockST
+enum menu
 {
-  STOP = 0,
-  START,
-  HOME
+  Menu = 0,
+  Action,
 };
 
-enum Clicks
-{
-  ONE = 1,
-  TWO,
-  THREE,
-};
 //=======================================================================
 
 //=========================== GLOBAL CONFIG =============================
@@ -98,6 +91,7 @@ extern GlobalConfig Config;
 struct SYTM
 {
   bool DispState = true;
+  uint8_t DispMenu = Menu;
   bool RelayState = false;
   int16_t yearSet;
   int16_t monthSet;

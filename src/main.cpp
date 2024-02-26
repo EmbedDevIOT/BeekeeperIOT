@@ -4,30 +4,44 @@
 #define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 5        /* Time ESP32 will go to sleep (in seconds) */
 
-
 #define EB_CLICK_TIME 100 // таймаут ожидания кликов (кнопка)
 
+#define OLED_SOFT_BUFFER_64     // Буфер на стороне МК
+
 #define DISP_TIME (tmrMin == 10 && tmrSec == 0)
+#define ITEM 4 // количество пунктов меню
 
 // GPIO PINs
-#define SET_PIN 18        // кнопкa Выбор
-#define PL_PIN 19         // кнопкa Плюс
-#define MN_PIN 5          // кнопкa Минус
-#define RELAY 23          // Реле
-#define DS_SNS 4          // ds18b20
-#define TX_PIN 17         // tx
-#define RX_PIN 16         // rx
-#define HX_DT 25          // HXT
-#define HX_CLK 26         // rx
+#define SET_PIN 18 // кнопкa Выбор
+#define PL_PIN 19  // кнопкa Плюс
+#define MN_PIN 5   // кнопкa Минус
+#define RELAY 23   // Реле
+#define DS_SNS 4   // ds18b20
+#define TX_PIN 17  // tx
+#define RX_PIN 16  // rx
+#define HX_DT 25   // HXT
+#define HX_CLK 26  // rx
 
 /*
 I2C device found at address 0x3C !
 I2C device found at address 0x68 !
 I2C device found at address 0x76 !
 */
+
+#error oled_buffer 
+
 #define BME_ADR 0x76
 #define OLED_ADR 0x3C
 #define RTC_ADR 0x68
+
+const char i0[] PROGMEM = " Время Дата: ";
+const char i1[] PROGMEM = " Оповещения: ";
+const char i2[] PROGMEM = " Калибровка: ";
+const char i3[] PROGMEM = " Аккумулятор: ";
+
+const char *const names[] PROGMEM =
+    {
+        i0, i1, i2, i3};
 
 GlobalConfig Config;
 SNS sensors;
@@ -36,6 +50,8 @@ DateTime Clock;
 
 uint16_t tmrSec = 0;
 uint16_t tmrMin = 0;
+
+uint8_t disp_ptr = 0;
 
 // #define OLED_SPI_SPEED 8000000ul
 RTC_DATA_ATTR int bootCount = 0;
@@ -60,6 +76,9 @@ void ButtonHandler();
 void BeekeeperConroller();
 void Task500ms();
 void Task1000ms();
+void MainMenu(uint8_t item);
+void printMenuItem(uint8_t num);
+void func(void);
 
 /* Method to print the reason by which ESP32
 has been awaken from sleep
@@ -116,6 +135,7 @@ void setup()
 
   scale.begin(HX_DT, HX_CLK); // HX
   disp.init();
+  disp.setContrast(255);
 
   bool status;
   status = bme.begin(0x76);
@@ -135,8 +155,8 @@ void setup()
   uint32_t Pressure = bme.readPressure();
   delay(20);
 
-  pinMode(RELAY,OUTPUT);
-  digitalWrite(RELAY,LOW);
+  pinMode(RELAY, OUTPUT);
+  digitalWrite(RELAY, LOW);
 
   StartingInfo();
   delay(1500);
@@ -228,30 +248,48 @@ void ButtonHandler()
     if (btSET.click())
     {
       Serial.println("State: BTN_ SET_ Click");
-      System.RelayState = !System.RelayState;
+      System.DispMenu == 0 ? System.DispMenu = 1 : System.DispMenu = 0;
+      disp.clear();
+      disp.home();
+      // System.RelayState = !System.RelayState;
     }
   }
 
   while (btUP.busy())
   {
     btUP.tick();
-    if (btUP.hasClicks(1))
+    if (btUP.click())
     {
       Serial.println("State: BTN_UP_ Click");
       disp.setPower(true);
       System.DispState = true;
       tmrMin = 0;
       tmrSec = 0;
+      // Уменьшаем указатель на 1, и если он стал меньше 1, присваиваем указателю ITEM - 1
+      if (--disp_ptr < 1)
+        disp_ptr = ITEM - 1;
+
+      // disp.clear();
+      // disp.home();
+      Serial.printf("ptr:%d", disp_ptr);
+      Serial.println();
     }
   }
 
   while (btDWN.busy())
   {
     btDWN.tick();
-    if (btDWN.hasClicks(1))
+    if (btDWN.click())
     {
       Serial.println("State: BTN_DWN_ Click");
-      disp.setPower(false);
+
+      if (++disp_ptr < ITEM - 1)
+        disp_ptr = 0;
+
+      disp.clear();
+      disp.home();
+      Serial.printf("ptr:%d", disp_ptr);
+      Serial.println();
     }
   }
 }
@@ -318,26 +356,14 @@ void sendSMS(String phone, String message)
 
 void DisplayUpd()
 {
-  char dispbuf[30];
 
   static uint32_t tmr;
 
   if (millis() - tmr >= 50)
   {
     tmr = millis();
-    sprintf(dispbuf, "%02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
-    disp.setScale(2);
-    disp.setCursor(15, 0);
-    disp.print(dispbuf);
-    disp.update();
-    
-    sprintf(dispbuf, "Вес: %0.1f кг", 10.3);
-    disp.setScale(2);
-    disp.setCursor(5, 2);
-    disp.print(dispbuf);
-    disp.update();
+    MainMenu(System.DispMenu);
 
-    // sprintf(dispbuf, "T1:%0.1fC T2:%0.1fC H:%0.1f% P:%3dkPa", sensors.dsT, sensors.bmeT, sensors.bmeH, sensors.bmeP);
     // disp.setScale(1);
     // disp.setCursor(5, 2);
     // disp.print(dispbuf);
@@ -354,11 +380,12 @@ void Task500ms()
     tmr500 = millis();
     Clock = RTC.getTime();
 
-    if(System.RelayState){
-      digitalWrite(RELAY,ENABLE);
+    if (System.RelayState)
+    {
+      digitalWrite(RELAY, ENABLE);
     }
-    else digitalWrite(RELAY, DISABLE);
-
+    else
+      digitalWrite(RELAY, DISABLE);
   }
 }
 
@@ -439,3 +466,72 @@ void I2C_Scanning(void)
   // delay(5000);
 }
 /*******************************************************************************************************/
+/******************************************* MAIN_MENU *************************************************/
+void MainMenu(uint8_t item)
+{
+
+  switch (item)
+  {
+  case Menu:
+    for (uint8_t i = disp_ptr; i < disp_ptr + 8; i++)
+    {                                               // Цикл считающий от значения указателя еще 8 раз
+      printMenuItem(i > ITEM - 1 ? i - ITEM : i); // Если результат больше ITEMS - 1 -> начинаем сначала, иначе -> продолжаем как обычно
+    }
+    /* Указатель стоит на месте */
+    disp.setCursor(0, 0);
+    disp.print(">");
+    disp.setCursor(20, 0);
+    disp.print("<");
+
+    disp.update();
+    break;
+
+  case Action:
+    char dispbuf[30];
+    // disp.clear();
+    // disp.home();
+
+    sprintf(dispbuf, "%02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
+    disp.setScale(1);
+    disp.setCursor(15, 0);
+    disp.print(dispbuf);
+    disp.update();
+
+    sprintf(dispbuf, "W:%0.1f", 10.3);
+    disp.setScale(2);
+    disp.setCursor(5, 2);
+    disp.print(dispbuf);
+    disp.update();
+
+    sprintf(dispbuf, "T1:%0.1fC T2:%0.1fC H:%0.1f% P:%3dkPa", sensors.dsT, sensors.bmeT, sensors.bmeH, sensors.bmeP);
+    break;
+
+  default:
+    break;
+  }
+}
+/*******************************************************************************************************/
+// Функция для печати строки из prm
+void printMenuItem(uint8_t num) {
+  char buffer[21];                                // Буфер на полную строку
+  uint16_t ptr = pgm_read_word(&(names[num]));    // Получаем указатель на первый символ строки
+  uint8_t i = 0;                                  // Переменная - счетчик
+
+  do {                                            // Начало цикла
+    buffer[i] = (char)(pgm_read_byte(ptr++));     // Прочитать в буфер один символ из PGM и подвинуть указатель на 1
+  } while (buffer[i++] != NULL);                  // Если это не конец строки - вернуться в начало цикла
+
+  disp.println(buffer);                           // Вывод готовой строки с переносом на следующую
+}
+
+/* пример вложеной функции, которую можно вызвать из под меню */
+void func(void) {
+  disp.clear();
+  disp.home();
+  disp.print(F("Press OK to return"));
+  disp.update();
+  while (1) {
+    btSET.tick();
+    if (btSET.click()) return; // return возвращает нас в предыдущее меню
+  }
+}
