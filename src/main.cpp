@@ -1,4 +1,5 @@
 #include "Config.h"
+#include "FileConfig.h"
 
 #define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 5        /* Time ESP32 will go to sleep (in seconds) */
@@ -8,53 +9,54 @@
 #define SET_PIN 18        // кнопкa Выбор
 #define PL_PIN 19         // кнопкa Плюс
 #define MN_PIN 5          // кнопкa Минус
+#define RELAY 23          // Реле
+#define DS_SNS 4          // ds18b20
+#define TX_PIN 17         // tx
+#define RX_PIN 16         // rx
+#define HX_DT 25          // HXT
+#define HX_CLK 26         // rx
 
-#define RELAY 23 // Реле
-
-#define DS_SNS 4 // ds18b20
-
-#define TX_PIN 17 // tx
-#define RX_PIN 16 // rx
-
-#define HX_DT  25  // HXT
-#define HX_CLK 26 // rx
+/*
+I2C device found at address 0x3C !
+I2C device found at address 0x68 !
+I2C device found at address 0x76 !
+*/
+#define BME_ADR 0x76
+#define OLED_ADR 0x3C
+#define RTC_ADR 0x68
 
 GlobalConfig Config;
 SNS sensors;
+DateTime Clock;
 
-#define OLED_SPI_SPEED 8000000ul
+// #define OLED_SPI_SPEED 8000000ul
 RTC_DATA_ATTR int bootCount = 0;
 
-GyverOLED<SSD1306_128x64, OLED_NO_BUFFER> oled;
+GyverOLED<SSD1306_128x64, OLED_NO_BUFFER> disp;
 HX711 scale; //
 SoftwareSerial SIM800(TX_PIN, RX_PIN);
-OneWire DS(DS_SNS);
-
+// MicroDS18B20<DS_SNS> ds;
+// OneWire DS(DS_SNS);
+MicroDS3231 RTC; // 0x68
 Button btUP(PL_PIN, INPUT_PULLUP);
 Button btSET(SET_PIN, INPUT_PULLUP);
 Button btDWN(MN_PIN, INPUT_PULLUP);
 
 #define SEALEVELPRESSURE_HPA (1013.25)
-Adafruit_BME280 bme; // I2C BUS
+Adafruit_BME280 bme; // I2C BUS_
 
-double vectors[8][3] = {{20, 20, 20}, {-20, 20, 20}, {-20, -20, 20}, {20, -20, 20}, {20, 20, -20}, {-20, 20, -20}, {-20, -20, -20}, {20, -20, -20}};
-double perspective = 100.0f;
-int deltaX, deltaY, deltaZ, iter = 0;
-uint32_t timer;
-
+void I2C_Scanning(void);
 void StartingInfo();
+void DisplayUpd();
 void ButtonHandler();
 void BeekeeperConroller();
+void Task500ms();
+void Task1000ms();
 
-// int translateX(double x, double z);
-// void rotateX(int angle);
-// void rotateY(int angle);
-// void rotateZ(int angle);
-// void drawVectors();
-/*
-Method to print the reason by which ESP32
+/* Method to print the reason by which ESP32
 has been awaken from sleep
 */
+
 void print_wakeup_reason()
 {
   esp_sleep_wakeup_cause_t wakeup_reason;
@@ -86,15 +88,26 @@ void print_wakeup_reason()
 
 void setup()
 {
+  Config.firmware = "0.4";
+
   Serial.begin(UARTSpeed);
-  Config.firmware = "0.3";
+  Serial.println("Beekeeper");
   Serial.printf("firmware: %s", Config.firmware);
   Serial.println();
-  // Wire.begin();
-  scale.begin(HX_DT, HX_CLK); // HX
-  oled.init();                // инициализация
   Wire.begin();
   delay(20);
+  I2C_Scanning();
+  delay(2000);
+  byte errSPIFFS = SPIFFS.begin(true);
+  Serial.println(F("SPIFFS...init"));
+  LoadConfig();
+
+  byte errRTC = RTC.begin();
+  Clock = RTC.getTime();
+  Serial.println(F("RTC...init"));
+
+  scale.begin(HX_DT, HX_CLK); // HX
+  disp.init();
 
   bool status;
   status = bme.begin(0x76);
@@ -115,11 +128,19 @@ void setup()
   delay(20);
 
   StartingInfo();
+  delay(1500);
+  disp.clear();
+  disp.invertText(false);
 }
 
 void loop()
 {
   ButtonHandler();
+  DisplayUpd();
+  Task500ms();
+  Task1000ms();
+
+  // BeekeeperConroller();
   // task_1000();
   // if (scale.is_ready())
   // {
@@ -141,108 +162,37 @@ void loop()
   // delay(1000);
 }
 
-int translateX(double x, double z)
-{
-  return (int)((x + 64) + (z * (x / perspective)));
-}
-
-int translateY(double y, double z)
-{
-  return (int)((y + 32) + (z * (y / perspective)));
-}
-
-void rotateX(int angle)
-{
-  double rad, cosa, sina, Yn, Zn;
-  rad = angle * PI / 180;
-  cosa = cos(rad);
-  sina = sin(rad);
-  for (int i = 0; i < 8; i++)
-  {
-    Yn = (vectors[i][1] * cosa) - (vectors[i][2] * sina);
-    Zn = (vectors[i][1] * sina) + (vectors[i][2] * cosa);
-    vectors[i][1] = Yn;
-    vectors[i][2] = Zn;
-  }
-}
-
-void rotateY(int angle)
-{
-  double rad, cosa, sina, Xn, Zn;
-  rad = angle * PI / 180;
-  cosa = cos(rad);
-  sina = sin(rad);
-  for (int i = 0; i < 8; i++)
-  {
-    Xn = (vectors[i][0] * cosa) - (vectors[i][2] * sina);
-    Zn = (vectors[i][0] * sina) + (vectors[i][2] * cosa);
-    vectors[i][0] = Xn;
-    vectors[i][2] = Zn;
-  }
-}
-
-void rotateZ(int angle)
-{
-  double rad, cosa, sina, Xn, Yn;
-  rad = angle * PI / 180;
-  cosa = cos(rad);
-  sina = sin(rad);
-  for (int i = 0; i < 8; i++)
-  {
-    Xn = (vectors[i][0] * cosa) - (vectors[i][1] * sina);
-    Yn = (vectors[i][0] * sina) + (vectors[i][1] * cosa);
-    vectors[i][0] = Xn;
-    vectors[i][1] = Yn;
-  }
-}
-
-void drawVectors()
-{
-  oled.line(translateX(vectors[0][0], vectors[0][2]), translateY(vectors[0][1], vectors[0][2]), translateX(vectors[1][0], vectors[1][2]), translateY(vectors[1][1], vectors[1][2]));
-  oled.line(translateX(vectors[1][0], vectors[1][2]), translateY(vectors[1][1], vectors[1][2]), translateX(vectors[2][0], vectors[2][2]), translateY(vectors[2][1], vectors[2][2]));
-  oled.line(translateX(vectors[2][0], vectors[2][2]), translateY(vectors[2][1], vectors[2][2]), translateX(vectors[3][0], vectors[3][2]), translateY(vectors[3][1], vectors[3][2]));
-  oled.line(translateX(vectors[3][0], vectors[3][2]), translateY(vectors[3][1], vectors[3][2]), translateX(vectors[0][0], vectors[0][2]), translateY(vectors[0][1], vectors[0][2]));
-  oled.line(translateX(vectors[4][0], vectors[4][2]), translateY(vectors[4][1], vectors[4][2]), translateX(vectors[5][0], vectors[5][2]), translateY(vectors[5][1], vectors[5][2]));
-  oled.line(translateX(vectors[5][0], vectors[5][2]), translateY(vectors[5][1], vectors[5][2]), translateX(vectors[6][0], vectors[6][2]), translateY(vectors[6][1], vectors[6][2]));
-  oled.line(translateX(vectors[6][0], vectors[6][2]), translateY(vectors[6][1], vectors[6][2]), translateX(vectors[7][0], vectors[7][2]), translateY(vectors[7][1], vectors[7][2]));
-  oled.line(translateX(vectors[7][0], vectors[7][2]), translateY(vectors[7][1], vectors[7][2]), translateX(vectors[4][0], vectors[4][2]), translateY(vectors[4][1], vectors[4][2]));
-  oled.line(translateX(vectors[0][0], vectors[0][2]), translateY(vectors[0][1], vectors[0][2]), translateX(vectors[4][0], vectors[4][2]), translateY(vectors[4][1], vectors[4][2]));
-  oled.line(translateX(vectors[1][0], vectors[1][2]), translateY(vectors[1][1], vectors[1][2]), translateX(vectors[5][0], vectors[5][2]), translateY(vectors[5][1], vectors[5][2]));
-  oled.line(translateX(vectors[2][0], vectors[2][2]), translateY(vectors[2][1], vectors[2][2]), translateX(vectors[6][0], vectors[6][2]), translateY(vectors[6][1], vectors[6][2]));
-  oled.line(translateX(vectors[3][0], vectors[3][2]), translateY(vectors[3][1], vectors[3][2]), translateX(vectors[7][0], vectors[7][2]), translateY(vectors[7][1], vectors[7][2]));
-}
-
 void StartingInfo()
 {
-  oled.clear();     // очистка
-  oled.setScale(2); // масштаб текста (1..4)
+  disp.clear();     // очистка
+  disp.setScale(2); // масштаб текста (1..4)
   // oled.home();      // курсор в 0,0
-  oled.setCursor(10, 0);
-  oled.print("Beekeeper");
+  disp.setCursor(10, 0);
+  disp.print("Beekeeper");
   delay(1000);
-  oled.setScale(1);
+  disp.setScale(1);
   // курсор на начало 3 строки
-  oled.setCursor(0, 3);
-  oled.print("starting...");
+  disp.setCursor(0, 3);
+  disp.print("starting...");
 
-  oled.clear();
-  oled.update();
+  disp.clear();
+  disp.update();
   byte textPos1 = 8;
   byte textPos2 = 32;
 
-  oled.createBuffer(5, 0, 66, textPos2 + 8 + 2);
+  disp.createBuffer(5, 0, 66, textPos2 + 8 + 2);
 
-  oled.roundRect(5, textPos1 - 4, 65, textPos1 + 8 + 2, OLED_STROKE);
-  oled.setCursorXY(10, textPos1);
-  oled.print("SET MODE");
+  disp.roundRect(5, textPos1 - 4, 65, textPos1 + 8 + 2, OLED_STROKE);
+  disp.setCursorXY(10, textPos1);
+  disp.print("SET MODE");
 
-  oled.roundRect(5, textPos2 - 4, 65, textPos2 + 8 + 2, OLED_FILL);
-  oled.setCursorXY(10, textPos2);
-  oled.invertText(true);
-  oled.print("LOL KEK");
+  disp.roundRect(5, textPos2 - 4, 65, textPos2 + 8 + 2, OLED_FILL);
+  disp.setCursorXY(10, textPos2);
+  disp.invertText(true);
+  disp.print("LOL KEK");
 
-  oled.sendBuffer();
-  oled.update();
+  disp.sendBuffer();
+  disp.update();
 }
 
 void ButtonHandler()
@@ -269,6 +219,7 @@ void ButtonHandler()
     if (btUP.hasClicks(1))
     {
       Serial.println("State: BTN_UP_ Click");
+      disp.setPower(true);
     }
   }
 
@@ -278,6 +229,7 @@ void ButtonHandler()
     if (btDWN.hasClicks(1))
     {
       Serial.println("State: BTN_DWN_ Click");
+      disp.setPower(false);
     }
   }
 }
@@ -285,11 +237,11 @@ void ButtonHandler()
 // Getting Time and Date from RTC
 void GetClock()
 {
-  System.hour = RTC.getHours(h12, PM);
-  System.min = Clock.getMinute();
-  year = Clock.getYear();
-  month = Clock.getMonth(Century);
-  date = Clock.getDate();
+  // System.hour = RTC.getHours(h12, PM);
+  // System.min = Clock.getMinute();
+  // year = Clock.getYear();
+  // month = Clock.getMonth(Century);
+  // date = Clock.getDate();
 }
 
 // Get Data from BME Sensor
@@ -341,3 +293,102 @@ void sendSMS(String phone, String message)
   sendATCommand("AT+CMGS=\"" + phone + "\"", true);
   sendATCommand(message + "\r\n" + (String)((char)26), true);
 }
+
+void DisplayUpd()
+{
+  char dispbuf[30];
+
+  static uint32_t tmr;
+
+  if (millis() - tmr >= 30)
+  {
+    tmr = millis();
+    sprintf(dispbuf, "%02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
+    disp.setScale(2);
+    disp.setCursor(15, 0);
+    disp.print(dispbuf);
+    disp.update();
+  }
+}
+
+void Task500ms()
+{
+  static uint32_t tmr500;
+
+  if (millis() - tmr500 >= 500)
+  {
+    tmr500 = millis();
+    Clock = RTC.getTime();
+  }
+}
+
+void Task1000ms()
+{
+  char serbuf[30];
+
+  static uint32_t tmr1000;
+  static uint16_t tmrSec;
+  static uint16_t tmrMin;
+
+  if (millis() - tmr1000 >= 1000)
+  {
+    tmr1000 = millis();
+    // GetBme();
+    if (tmrSec < 59)
+    {
+      tmrSec++;
+    }
+    else {
+      tmrSec = 0;
+      tmrMin ++;
+    }
+    if(tmrMin == 2){
+      
+    }
+
+    sprintf(serbuf, "T:%02d:%02d", tmrMin, tmrSec);
+    Serial.print(serbuf);
+    Serial.println();
+  }
+}
+
+/**************************************** Scanning I2C bus *********************************************/
+void I2C_Scanning(void)
+{
+  byte error, address;
+  int nDevices;
+
+  Serial.println("Scanning...");
+
+  nDevices = 0;
+  for (address = 8; address < 127; address++)
+  {
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+
+    if (error == 0)
+    {
+      Serial.print("I2C device found at address 0x");
+      if (address < 16)
+        Serial.print("0");
+      Serial.print(address, HEX);
+      Serial.println(" !");
+
+      nDevices++;
+    }
+    else if (error == 4)
+    {
+      Serial.print("Unknow error at address 0x");
+      if (address < 16)
+        Serial.print("0");
+      Serial.println(address, HEX);
+    }
+  }
+  if (nDevices == 0)
+    Serial.println("No I2C devices found\n");
+  else
+    Serial.println("done\n");
+
+  delay(5000);
+}
+/*******************************************************************************************************/

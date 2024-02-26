@@ -3,13 +3,14 @@
 
 #include <Arduino.h>
 
-#include <WiFi.h>
-#include <WebServer.h>
-#include <ElegantOTA.h>
-#include <ArduinoJson.h>
-#include "SPIFFS.h"
+// #include <WiFi.h>
+// #include <WebServer.h>
+// #include <ElegantOTA.h>
+// #include "FileConfig.h"
+// #include <ArduinoJson.h>
+// #include "SPIFFS.h"
 #include <microDS3231.h>
-#include <microDS18B20.h>
+// #include <microDS18B20.h>
 #include "SoftwareSerial.h"
 #include <Wire.h>
 #include "Adafruit_BME280.h"
@@ -96,16 +97,9 @@ extern GlobalConfig Config;
 //=======================================================================
 struct SYTM
 {
-  int16_t year = 0;
-  int16_t month = 0;
-  int16_t date = 0;
-  int16_t day;
-  int16_t hour;
-  int16_t min;
   int16_t yearSet;
   int16_t monthSet;
   int16_t dateSet;
-  int16_t daySet;
   int16_t daySet;
 };
 extern SYTM System;
@@ -140,7 +134,7 @@ extern Flag FlagState;
 void SystemInit(void);     //  System Initialisation (variables and structure)
 void ShowInfoDevice(void); //  Show information or this Device
 void GetChipID(void);
-String GetMacAdr();
+// String GetMacAdr();
 void CheckSystemState(void);
 void DebugControl(void);
 void SystemFactoryReset(void);
