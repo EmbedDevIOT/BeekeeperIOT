@@ -4,8 +4,12 @@
 #define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 5        /* Time ESP32 will go to sleep (in seconds) */
 
-// GPIO PINs
+
 #define EB_CLICK_TIME 100 // таймаут ожидания кликов (кнопка)
+
+#define DISP_TIME (tmrMin == 10 && tmrSec == 0)
+
+// GPIO PINs
 #define SET_PIN 18        // кнопкa Выбор
 #define PL_PIN 19         // кнопкa Плюс
 #define MN_PIN 5          // кнопкa Минус
@@ -27,7 +31,11 @@ I2C device found at address 0x76 !
 
 GlobalConfig Config;
 SNS sensors;
+SYTM System;
 DateTime Clock;
+
+uint16_t tmrSec = 0;
+uint16_t tmrMin = 0;
 
 // #define OLED_SPI_SPEED 8000000ul
 RTC_DATA_ATTR int bootCount = 0;
@@ -127,6 +135,9 @@ void setup()
   uint32_t Pressure = bme.readPressure();
   delay(20);
 
+  pinMode(RELAY,OUTPUT);
+  digitalWrite(RELAY,LOW);
+
   StartingInfo();
   delay(1500);
   disp.clear();
@@ -135,8 +146,15 @@ void setup()
 
 void loop()
 {
+  if (System.DispState)
+  {
+    DisplayUpd();
+  }
+  else
+    disp.setPower(false);
+
   ButtonHandler();
-  DisplayUpd();
+
   Task500ms();
   Task1000ms();
 
@@ -210,6 +228,7 @@ void ButtonHandler()
     if (btSET.click())
     {
       Serial.println("State: BTN_ SET_ Click");
+      System.RelayState = !System.RelayState;
     }
   }
 
@@ -220,6 +239,9 @@ void ButtonHandler()
     {
       Serial.println("State: BTN_UP_ Click");
       disp.setPower(true);
+      System.DispState = true;
+      tmrMin = 0;
+      tmrSec = 0;
     }
   }
 
@@ -300,7 +322,7 @@ void DisplayUpd()
 
   static uint32_t tmr;
 
-  if (millis() - tmr >= 30)
+  if (millis() - tmr >= 50)
   {
     tmr = millis();
     sprintf(dispbuf, "%02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
@@ -308,6 +330,18 @@ void DisplayUpd()
     disp.setCursor(15, 0);
     disp.print(dispbuf);
     disp.update();
+    
+    sprintf(dispbuf, "Вес: %0.1f кг", 10.3);
+    disp.setScale(2);
+    disp.setCursor(5, 2);
+    disp.print(dispbuf);
+    disp.update();
+
+    // sprintf(dispbuf, "T1:%0.1fC T2:%0.1fC H:%0.1f% P:%3dkPa", sensors.dsT, sensors.bmeT, sensors.bmeH, sensors.bmeP);
+    // disp.setScale(1);
+    // disp.setCursor(5, 2);
+    // disp.print(dispbuf);
+    // disp.update();
   }
 }
 
@@ -319,6 +353,12 @@ void Task500ms()
   {
     tmr500 = millis();
     Clock = RTC.getTime();
+
+    if(System.RelayState){
+      digitalWrite(RELAY,ENABLE);
+    }
+    else digitalWrite(RELAY, DISABLE);
+
   }
 }
 
@@ -327,28 +367,35 @@ void Task1000ms()
   char serbuf[30];
 
   static uint32_t tmr1000;
-  static uint16_t tmrSec;
-  static uint16_t tmrMin;
 
   if (millis() - tmr1000 >= 1000)
   {
     tmr1000 = millis();
     // GetBme();
-    if (tmrSec < 59)
+    if (System.DispState)
     {
-      tmrSec++;
-    }
-    else {
-      tmrSec = 0;
-      tmrMin ++;
-    }
-    if(tmrMin == 2){
-      
+      if (tmrSec < 59)
+      {
+        tmrSec++;
+      }
+      else
+      {
+        tmrSec = 0;
+        tmrMin++;
+      }
+      // sprintf(serbuf, "T:%02d:%02d", tmrMin, tmrSec);
+      // Serial.print(serbuf);
+      // Serial.println();
     }
 
-    sprintf(serbuf, "T:%02d:%02d", tmrMin, tmrSec);
-    Serial.print(serbuf);
-    Serial.println();
+    if DISP_TIME
+    {
+      // disp.setPower(false);
+      System.DispState = false;
+      Serial.println("TimeOut: Display - OFF");
+      tmrMin = 0;
+      tmrSec = 0;
+    }
   }
 }
 
@@ -389,6 +436,6 @@ void I2C_Scanning(void)
   else
     Serial.println("done\n");
 
-  delay(5000);
+  // delay(5000);
 }
 /*******************************************************************************************************/

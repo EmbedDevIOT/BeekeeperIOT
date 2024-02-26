@@ -97,6 +97,8 @@ extern GlobalConfig Config;
 //=======================================================================
 struct SYTM
 {
+  bool DispState = true;
+  bool RelayState = false;
   int16_t yearSet;
   int16_t monthSet;
   int16_t dateSet;
