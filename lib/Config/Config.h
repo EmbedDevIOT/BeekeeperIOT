@@ -7,14 +7,16 @@
 // #include <WebServer.h>
 // #include <ElegantOTA.h>
 // #include "FileConfig.h"
-// #include <ArduinoJson.h>
-// #include "SPIFFS.h"
+#include <ArduinoJson.h>
+#include "SPIFFS.h"
 #include <microDS3231.h>
-// #include <microDS18B20.h>
-#include "SoftwareSerial.h"
+#include <microDS18B20.h>
+// #include "SoftwareSerial.h"
 #include <Wire.h>
-#include "Adafruit_BME280.h"
-#include <Adafruit_Sensor.h>
+#include <GyverBME280.h>     
+
+// #include "Adafruit_BME280.h"
+// #include <Adafruit_Sensor.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
@@ -45,21 +47,18 @@ extern DateTime Clock;
 //=======================================================================
 
 //========================== ENUMERATION ================================
-enum OS_T
-{
-  T_10MS = 0,
-  T_100MS,
-  T_300MS,
-  T_500MS,
-  T_1000MS
-};
-
+//=======================================================================
 enum menu
 {
   Menu = 0,
   Action,
+  Time,
+  Date,
+  Calib,
+  Notifycation,
+  Battery,
+  IDLE
 };
-
 //=======================================================================
 
 //=========================== GLOBAL CONFIG =============================
@@ -76,8 +75,6 @@ struct GlobalConfig
 
   String APSSID = "Beekeeper";
   String APPAS = "12345678";
-  String Ssid = "AECorp2G";      // SSID Wifi network
-  String Password = "Ae19co90$"; // Paswords WiFi network
 
   int TimeZone = 0;
   byte WiFiMode = 0; // Режим работы WiFi
@@ -91,7 +88,7 @@ extern GlobalConfig Config;
 struct SYTM
 {
   bool DispState = true;
-  uint8_t DispMenu = Menu;
+  uint8_t DispMenu = Action;
   bool RelayState = false;
   int16_t yearSet;
   int16_t monthSet;
@@ -113,6 +110,7 @@ struct SNS
   float g_eeprom = 0.0;
   float grms;
   float g_obnul = 0;
+  uint8_t voltage  = 10;
 };
 extern SNS sensors;
 //=======================================================================
@@ -130,7 +128,6 @@ extern Flag FlagState;
 void SystemInit(void);     //  System Initialisation (variables and structure)
 void ShowInfoDevice(void); //  Show information or this Device
 void GetChipID(void);
-// String GetMacAdr();
 void CheckSystemState(void);
 void DebugControl(void);
 void SystemFactoryReset(void);

@@ -1,16 +1,14 @@
 #include "Config.h"
 #include "FileConfig.h"
+//=======================================================================
 
+//========================== DEFINITIONS ================================
 #define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 5        /* Time ESP32 will go to sleep (in seconds) */
 
-#define EB_CLICK_TIME 100 // таймаут ожидания кликов (кнопка)
-
-#define OLED_SOFT_BUFFER_64     // Буфер на стороне МК
-
+#define EB_CLICK_TIME 100 // Button timeout
 #define DISP_TIME (tmrMin == 10 && tmrSec == 0)
-#define ITEM 4 // количество пунктов меню
-
+#define ITEMS 6 // Main Menu Items
 // GPIO PINs
 #define SET_PIN 18 // кнопкa Выбор
 #define PL_PIN 19  // кнопкa Плюс
@@ -21,54 +19,43 @@
 #define RX_PIN 16  // rx
 #define HX_DT 25   // HXT
 #define HX_CLK 26  // rx
-
-/*
-I2C device found at address 0x3C !
-I2C device found at address 0x68 !
-I2C device found at address 0x76 !
-*/
-
-#error oled_buffer 
-
+// I2C Adress
 #define BME_ADR 0x76
 #define OLED_ADR 0x3C
 #define RTC_ADR 0x68
+//=======================================================================
 
-const char i0[] PROGMEM = " Время Дата: ";
-const char i1[] PROGMEM = " Оповещения: ";
-const char i2[] PROGMEM = " Калибровка: ";
-const char i3[] PROGMEM = " Аккумулятор: ";
-
-const char *const names[] PROGMEM =
-    {
-        i0, i1, i2, i3};
-
+//============================== STRUCTURES =============================
 GlobalConfig Config;
 SNS sensors;
 SYTM System;
 DateTime Clock;
+//=======================================================================
 
+//============================ GLOBAL VARIABLES =========================
 uint16_t tmrSec = 0;
 uint16_t tmrMin = 0;
-
 uint8_t disp_ptr = 0;
 
-// #define OLED_SPI_SPEED 8000000ul
 RTC_DATA_ATTR int bootCount = 0;
 
-GyverOLED<SSD1306_128x64, OLED_NO_BUFFER> disp;
+//================================ OBJECTs =============================
+#define OLED_SOFT_BUFFER_64 // Буфер на стороне МК
+GyverOLED<SSD1306_128x64> disp;
 HX711 scale; //
-SoftwareSerial SIM800(TX_PIN, RX_PIN);
-// MicroDS18B20<DS_SNS> ds;
+// Serial1 SIM800(TX_PIN, RX_PIN);
+MicroDS18B20<DS_SNS> ds18b20;
 // OneWire DS(DS_SNS);
 MicroDS3231 RTC; // 0x68
+GyverBME280 bme; // 0x76
 Button btUP(PL_PIN, INPUT_PULLUP);
 Button btSET(SET_PIN, INPUT_PULLUP);
 Button btDWN(MN_PIN, INPUT_PULLUP);
+// #define SEALEVELPRESSURE_HPA (1013.25)
+// Adafruit_BME280 bme; // I2C BUS_
+//=======================================================================
 
-#define SEALEVELPRESSURE_HPA (1013.25)
-Adafruit_BME280 bme; // I2C BUS_
-
+//================================ PROTOTIPs =============================
 void I2C_Scanning(void);
 void StartingInfo();
 void DisplayUpd();
@@ -76,48 +63,19 @@ void ButtonHandler();
 void BeekeeperConroller();
 void Task500ms();
 void Task1000ms();
-void MainMenu(uint8_t item);
-void printMenuItem(uint8_t num);
-void func(void);
-
-/* Method to print the reason by which ESP32
-has been awaken from sleep
-*/
-
-void print_wakeup_reason()
-{
-  esp_sleep_wakeup_cause_t wakeup_reason;
-
-  wakeup_reason = esp_sleep_get_wakeup_cause();
-
-  switch (wakeup_reason)
-  {
-  case ESP_SLEEP_WAKEUP_EXT0:
-    Serial.println("Wakeup caused by external signal using RTC_IO");
-    break;
-  case ESP_SLEEP_WAKEUP_EXT1:
-    Serial.println("Wakeup caused by external signal using RTC_CNTL");
-    break;
-  case ESP_SLEEP_WAKEUP_TIMER:
-    Serial.println("Wakeup caused by timer");
-    break;
-  case ESP_SLEEP_WAKEUP_TOUCHPAD:
-    Serial.println("Wakeup caused by touchpad");
-    break;
-  case ESP_SLEEP_WAKEUP_ULP:
-    Serial.println("Wakeup caused by ULP program");
-    break;
-  default:
-    Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
-    break;
-  }
-}
+void ShowMainMenu(uint8_t item);
+void printPointer(uint8_t pointer);
+void MenuControl(void);
+void GetDSData();
+void GetBMEData();
 
 void setup()
 {
-  Config.firmware = "0.4";
+  Config.firmware = "0.5";
 
   Serial.begin(UARTSpeed);
+  Serial1.begin(9600);
+
   Serial.println("Beekeeper");
   Serial.printf("firmware: %s", Config.firmware);
   Serial.println();
@@ -127,7 +85,7 @@ void setup()
   delay(2000);
   byte errSPIFFS = SPIFFS.begin(true);
   Serial.println(F("SPIFFS...init"));
-  LoadConfig();
+  // LoadConfig();
 
   byte errRTC = RTC.begin();
   Clock = RTC.getTime();
@@ -137,22 +95,23 @@ void setup()
   disp.init();
   disp.setContrast(255);
 
-  bool status;
-  status = bme.begin(0x76);
-  if (!status)
-  {
-    Serial.println("Could not find a valid BME280 sensor, check wiring!");
-    while (1)
-      ;
-  }
-  bme.setSampling(Adafruit_BME280::MODE_FORCED,
-                  Adafruit_BME280::SAMPLING_X1,
-                  Adafruit_BME280::SAMPLING_X1,
-                  Adafruit_BME280::SAMPLING_X1,
-                  Adafruit_BME280::FILTER_OFF);
+  // bool status;
+  // status = bme.begin(0x76);
+  bme.begin(0x76);
+  // if (!status)
+  // {
+  //   Serial.println("Could not find a valid BME280 sensor, check wiring!");
+  //   while (1)
+  //     ;
+  // }
+  // bme.setSampling(Adafruit_BME280::MODE_FORCED,
+  //                 Adafruit_BME280::SAMPLING_X1,
+  //                 Adafruit_BME280::SAMPLING_X1,
+  //                 Adafruit_BME280::SAMPLING_X1,
+  //                 Adafruit_BME280::FILTER_OFF);
 
-  bme.takeForcedMeasurement();
-  uint32_t Pressure = bme.readPressure();
+  // bme.takeForcedMeasurement();
+  // uint32_t Pressure = bme.readPressure();
   delay(20);
 
   pinMode(RELAY, OUTPUT);
@@ -161,7 +120,6 @@ void setup()
   StartingInfo();
   delay(1500);
   disp.clear();
-  disp.invertText(false);
 }
 
 void loop()
@@ -211,25 +169,8 @@ void StartingInfo()
   disp.setScale(1);
   // курсор на начало 3 строки
   disp.setCursor(0, 3);
-  disp.print("starting...");
+  disp.printf("fw:%s", Config.firmware);
 
-  disp.clear();
-  disp.update();
-  byte textPos1 = 8;
-  byte textPos2 = 32;
-
-  disp.createBuffer(5, 0, 66, textPos2 + 8 + 2);
-
-  disp.roundRect(5, textPos1 - 4, 65, textPos1 + 8 + 2, OLED_STROKE);
-  disp.setCursorXY(10, textPos1);
-  disp.print("SET MODE");
-
-  disp.roundRect(5, textPos2 - 4, 65, textPos2 + 8 + 2, OLED_FILL);
-  disp.setCursorXY(10, textPos2);
-  disp.invertText(true);
-  disp.print("LOL KEK");
-
-  disp.sendBuffer();
   disp.update();
 }
 
@@ -266,11 +207,8 @@ void ButtonHandler()
       tmrMin = 0;
       tmrSec = 0;
       // Уменьшаем указатель на 1, и если он стал меньше 1, присваиваем указателю ITEM - 1
-      if (--disp_ptr < 1)
-        disp_ptr = ITEM - 1;
+      disp_ptr = constrain(disp_ptr - 1, 0, ITEMS - 1); // Двигаем указатель в пределах дисплея
 
-      // disp.clear();
-      // disp.home();
       Serial.printf("ptr:%d", disp_ptr);
       Serial.println();
     }
@@ -283,75 +221,49 @@ void ButtonHandler()
     {
       Serial.println("State: BTN_DWN_ Click");
 
-      if (++disp_ptr < ITEM - 1)
-        disp_ptr = 0;
+      disp_ptr = constrain(disp_ptr + 1, 0, ITEMS - 1);
 
-      disp.clear();
-      disp.home();
       Serial.printf("ptr:%d", disp_ptr);
       Serial.println();
     }
   }
 }
 
-// Getting Time and Date from RTC
-void GetClock()
-{
-  // System.hour = RTC.getHours(h12, PM);
-  // System.min = Clock.getMinute();
-  // year = Clock.getYear();
-  // month = Clock.getMonth(Century);
-  // date = Clock.getDate();
-}
-
 // Get Data from BME Sensor
-void GetBme()
+void GetBmeData()
 {
-  bme.takeForcedMeasurement();
+  // bme.takeForcedMeasurement();
   sensors.bmeT = bme.readTemperature();
   sensors.bmeH = bme.readHumidity();
-  sensors.bmeP = (float)bme.readPressure() * 0.00750062;
-}
+  sensors.bmeP = bme.readPressure();
 
-String waitResponse()
+  Serial.print("Temperature: ");
+  Serial.print(bme.readTemperature()); // Выводим темперутуру в [*C]
+  Serial.println(" *C");
+
+  Serial.print("Humidity: ");
+  Serial.print(bme.readHumidity()); // Выводим влажность в [%]
+  Serial.println(" %");
+
+  float pressure = bme.readPressure(); // Читаем давление в [Па]
+  Serial.print("Pressure: ");
+  Serial.print(pressure / 100.0F); // Выводим давление в [гПа]
+  Serial.print(" hPa , ");
+  Serial.print(pressureToMmHg(pressure)); // Выводим давление в [мм рт. столба]
+  Serial.println(" mm Hg");
+  Serial.print("Altitide: ");
+  Serial.print(pressureToAltitude(pressure)); // Выводим высоту в [м над ур. моря]
+  Serial.println(" m");
+  Serial.println("");
+}
+// Get Data from DS18B20 Sensor
+void GetDSData()
 {
-  String _resp = "";
-  long _timeout = millis() + 10000;
-  while (!SIM800.available() && millis() < _timeout)
-  {
-  };
-  if (SIM800.available())
-  {
-    _resp = SIM800.readString();
-  }
+  ds18b20.requestTemp();
+  if (ds18b20.readTemp())
+    Serial.println(ds18b20.getTemp());
   else
-  {
-    Serial.println("Timeout...");
-  }
-  return _resp;
-}
-
-String sendATCommand(String cmd, bool waiting)
-{
-  String _resp = "";
-  Serial.println(cmd);
-  SIM800.println(cmd);
-  if (waiting)
-  {
-    _resp = waitResponse();
-    if (_resp.startsWith(cmd))
-    {
-      _resp = _resp.substring(_resp.indexOf("\r", cmd.length()) + 2);
-    }
-    Serial.println(_resp);
-  }
-  return _resp;
-}
-
-void sendSMS(String phone, String message)
-{
-  sendATCommand("AT+CMGS=\"" + phone + "\"", true);
-  sendATCommand(message + "\r\n" + (String)((char)26), true);
+    Serial.println("error");
 }
 
 void DisplayUpd()
@@ -362,12 +274,7 @@ void DisplayUpd()
   if (millis() - tmr >= 50)
   {
     tmr = millis();
-    MainMenu(System.DispMenu);
-
-    // disp.setScale(1);
-    // disp.setCursor(5, 2);
-    // disp.print(dispbuf);
-    // disp.update();
+    ShowMainMenu(System.DispMenu);
   }
 }
 
@@ -398,7 +305,8 @@ void Task1000ms()
   if (millis() - tmr1000 >= 1000)
   {
     tmr1000 = millis();
-    // GetBme();
+    GetBmeData();
+    GetDSData();
     if (System.DispState)
     {
       if (tmrSec < 59)
@@ -467,29 +375,29 @@ void I2C_Scanning(void)
 }
 /*******************************************************************************************************/
 /******************************************* MAIN_MENU *************************************************/
-void MainMenu(uint8_t item)
+void ShowMainMenu(uint8_t item)
 {
-
   switch (item)
   {
   case Menu:
-    for (uint8_t i = disp_ptr; i < disp_ptr + 8; i++)
-    {                                               // Цикл считающий от значения указателя еще 8 раз
-      printMenuItem(i > ITEM - 1 ? i - ITEM : i); // Если результат больше ITEMS - 1 -> начинаем сначала, иначе -> продолжаем как обычно
-    }
-    /* Указатель стоит на месте */
-    disp.setCursor(0, 0);
-    disp.print(">");
-    disp.setCursor(20, 0);
-    disp.print("<");
+    disp.clear(); // Очищаем буфер
+    disp.home();  // Курсор в левый верхний угол
+    disp.setScale(1);
+    disp.print // Вывод всех пунктов
+        (F(
+            "  Время:\r\n"
+            "  Дата:\r\n"
+            "  Калибровка:\r\n"
+            "  Оповещения:\r\n"
+            "  Аккумулятор:\r\n"
+            "  Выход:\r\n"));
 
-    disp.update();
+    printPointer(disp_ptr); // Вывод указателя
+    disp.update();          // Выводим кадр на дисплей
     break;
 
   case Action:
     char dispbuf[30];
-    // disp.clear();
-    // disp.home();
 
     sprintf(dispbuf, "%02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
     disp.setScale(1);
@@ -506,32 +414,122 @@ void MainMenu(uint8_t item)
     sprintf(dispbuf, "T1:%0.1fC T2:%0.1fC H:%0.1f% P:%3dkPa", sensors.dsT, sensors.bmeT, sensors.bmeH, sensors.bmeP);
     break;
 
+  case Time:
+
+    break;
+  case Date:
+
+    break;
+  case Calib:
+
+    break;
+  case Notifycation:
+
+    break;
+  case Battery:
+
+    break;
+  case IDLE:
+
+    break;
   default:
     break;
   }
 }
 /*******************************************************************************************************/
-// Функция для печати строки из prm
-void printMenuItem(uint8_t num) {
-  char buffer[21];                                // Буфер на полную строку
-  uint16_t ptr = pgm_read_word(&(names[num]));    // Получаем указатель на первый символ строки
-  uint8_t i = 0;                                  // Переменная - счетчик
-
-  do {                                            // Начало цикла
-    buffer[i] = (char)(pgm_read_byte(ptr++));     // Прочитать в буфер один символ из PGM и подвинуть указатель на 1
-  } while (buffer[i++] != NULL);                  // Если это не конец строки - вернуться в начало цикла
-
-  disp.println(buffer);                           // Вывод готовой строки с переносом на следующую
+void printPointer(uint8_t pointer)
+{
+  disp.setCursor(0, pointer);
+  disp.print(">");
 }
 
-/* пример вложеной функции, которую можно вызвать из под меню */
-void func(void) {
+void MenuControl(void)
+{
   disp.clear();
   disp.home();
   disp.print(F("Press OK to return"));
   disp.update();
-  while (1) {
+  while (1)
+  {
     btSET.tick();
-    if (btSET.click()) return; // return возвращает нас в предыдущее меню
+    if (btSET.click())
+      return; // return возвращает нас в предыдущее меню
+  }
+}
+
+String waitResponse()
+{
+  String _resp = "";
+  long _timeout = millis() + 10000;
+  // while (!SIM800.available() && millis() < _timeout)
+  // {
+  // };
+  // if (SIM800.available())
+  // {
+  //   _resp = SIM800.readString();
+  // }
+  // else
+  // {
+  //   Serial.println("Timeout...");
+  // }
+  return _resp;
+}
+
+String sendATCommand(String cmd, bool waiting)
+{
+  String _resp = "";
+  Serial.println(cmd);
+  // SIM800.println(cmd);
+  if (waiting)
+  {
+    _resp = waitResponse();
+    if (_resp.startsWith(cmd))
+    {
+      _resp = _resp.substring(_resp.indexOf("\r", cmd.length()) + 2);
+    }
+    Serial.println(_resp);
+  }
+  return _resp;
+}
+
+void sendSMS(String phone, String message)
+{
+  sendATCommand("AT+CMGS=\"" + phone + "\"", true);
+  sendATCommand(message + "\r\n" + (String)((char)26), true);
+}
+
+void GetBatVoltage()
+{
+}
+
+/* Method to print the reason by which ESP32
+has been awaken from sleep
+*/
+void print_wakeup_reason()
+{
+  esp_sleep_wakeup_cause_t wakeup_reason;
+
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch (wakeup_reason)
+  {
+  case ESP_SLEEP_WAKEUP_EXT0:
+    Serial.println("Wakeup caused by external signal using RTC_IO");
+    break;
+  case ESP_SLEEP_WAKEUP_EXT1:
+    Serial.println("Wakeup caused by external signal using RTC_CNTL");
+    break;
+  case ESP_SLEEP_WAKEUP_TIMER:
+    Serial.println("Wakeup caused by timer");
+    break;
+  case ESP_SLEEP_WAKEUP_TOUCHPAD:
+    Serial.println("Wakeup caused by touchpad");
+    break;
+  case ESP_SLEEP_WAKEUP_ULP:
+    Serial.println("Wakeup caused by ULP program");
+    break;
+  default:
+    Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
+    break;
   }
 }
