@@ -33,18 +33,20 @@ DateTime Clock;
 //=======================================================================
 
 //============================ GLOBAL VARIABLES =========================
+float temperature = 0.0;
 uint16_t tmrSec = 0;
 uint16_t tmrMin = 0;
 uint8_t disp_ptr = 0;
+uint8_t address[8]; // Создаем массив для адреса
 
 RTC_DATA_ATTR int bootCount = 0;
-
+const int oneWireBus = 4;
 //================================ OBJECTs =============================
 #define OLED_SOFT_BUFFER_64 // Буфер на стороне МК
 GyverOLED<SSD1306_128x64> disp;
 HX711 scale; //
 // Serial1 SIM800(TX_PIN, RX_PIN);
-MicroDS18B20<DS_SNS> ds18b20;
+// MicroDS18B20<23> ds18b20;
 // OneWire DS(DS_SNS);
 MicroDS3231 RTC; // 0x68
 GyverBME280 bme; // 0x76
@@ -53,6 +55,11 @@ Button btSET(SET_PIN, INPUT_PULLUP);
 Button btDWN(MN_PIN, INPUT_PULLUP);
 // #define SEALEVELPRESSURE_HPA (1013.25)
 // Adafruit_BME280 bme; // I2C BUS_
+
+// Themperature sensor Dallas DS18b20
+OneWire oneWire(oneWireBus);
+DallasTemperature ds18b20(&oneWire);
+
 //=======================================================================
 
 //================================ PROTOTIPs =============================
@@ -68,6 +75,7 @@ void printPointer(uint8_t pointer);
 void MenuControl(void);
 void GetDSData();
 void GetBMEData();
+float readTemperature();
 
 void setup()
 {
@@ -83,8 +91,8 @@ void setup()
   delay(20);
   I2C_Scanning();
   delay(2000);
-  byte errSPIFFS = SPIFFS.begin(true);
-  Serial.println(F("SPIFFS...init"));
+  // byte errSPIFFS = SPIFFS.begin(true);
+  // Serial.println(F("SPIFFS...init"));
   // LoadConfig();
 
   byte errRTC = RTC.begin();
@@ -98,6 +106,8 @@ void setup()
   // bool status;
   // status = bme.begin(0x76);
   bme.begin(0x76);
+  // Start the DS18B20 sensor
+  ds18b20.begin();
   // if (!status)
   // {
   //   Serial.println("Could not find a valid BME280 sensor, check wiring!");
@@ -114,8 +124,8 @@ void setup()
   // uint32_t Pressure = bme.readPressure();
   delay(20);
 
-  pinMode(RELAY, OUTPUT);
-  digitalWrite(RELAY, LOW);
+  // pinMode(RELAY, OUTPUT);
+  // digitalWrite(RELAY, LOW);
 
   StartingInfo();
   delay(1500);
@@ -124,6 +134,9 @@ void setup()
 
 void loop()
 {
+  Task500ms();
+  Task1000ms();
+
   if (System.DispState)
   {
     DisplayUpd();
@@ -133,11 +146,8 @@ void loop()
 
   ButtonHandler();
 
-  Task500ms();
-  Task1000ms();
-
   // BeekeeperConroller();
-  // task_1000();
+
   // if (scale.is_ready())
   // {
   //   scale.set_scale();
@@ -259,11 +269,11 @@ void GetBmeData()
 // Get Data from DS18B20 Sensor
 void GetDSData()
 {
-  ds18b20.requestTemp();
-  if (ds18b20.readTemp())
-    Serial.println(ds18b20.getTemp());
-  else
-    Serial.println("error");
+  ds18b20.requestTemperatures();
+  sensors.dsT = ds18b20.getTempCByIndex(0);
+  // Serial.print("Температура: ");
+  // Serial.print(temperature);
+  // Serial.println("°C");
 }
 
 void DisplayUpd()
@@ -305,7 +315,7 @@ void Task1000ms()
   if (millis() - tmr1000 >= 1000)
   {
     tmr1000 = millis();
-    GetBmeData();
+    // GetBmeData();
     GetDSData();
     if (System.DispState)
     {
@@ -400,18 +410,18 @@ void ShowMainMenu(uint8_t item)
     char dispbuf[30];
 
     sprintf(dispbuf, "%02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
-    disp.setScale(1);
+    disp.setScale(2);
     disp.setCursor(15, 0);
     disp.print(dispbuf);
     disp.update();
 
-    sprintf(dispbuf, "W:%0.1f", 10.3);
-    disp.setScale(2);
+    sprintf(dispbuf, "W:%0.1f T1:%0.1f", 10.3, sensors.dsT);
+    disp.setScale(1);
     disp.setCursor(5, 2);
     disp.print(dispbuf);
     disp.update();
 
-    sprintf(dispbuf, "T1:%0.1fC T2:%0.1fC H:%0.1f% P:%3dkPa", sensors.dsT, sensors.bmeT, sensors.bmeH, sensors.bmeP);
+    // sprintf(dispbuf, "T1:%0.1fC T2:%0.1fC H:%0.1f% P:%3dkPa", sensors.dsT, sensors.bmeT, sensors.bmeH, sensors.bmeP);
     break;
 
   case Time:
@@ -533,3 +543,4 @@ void print_wakeup_reason()
     break;
   }
 }
+

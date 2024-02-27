@@ -10,7 +10,7 @@
 #include <ArduinoJson.h>
 #include "SPIFFS.h"
 #include <microDS3231.h>
-#include <microDS18B20.h>
+// #include <microDS18B20.h>
 // #include "SoftwareSerial.h"
 #include <Wire.h>
 #include <GyverBME280.h>     
