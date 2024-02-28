@@ -100,17 +100,20 @@ extern SYTM System;
 
 struct SNS
 {
-  float dsT = 0.0;  // Temperature DS18B20
-  float bmeT = 0.0; // Temperature BME280
-  float bmeH = 0.0; // Humidity   BME280
-  int bmeP = 0;     // Pressure   BME280
-  float calibr_factor = -0.77;
+  float dsT = 0.0;      // Temperature DS18B20
+  float bmeT = 0.0;     // Temperature BME280
+  float bmeH = 0.0;     // Humidity   BME280
+  float bmeHcal  = 4.2;
+  float bmeA = 0.0;     // Altitude   BME280 m
+  float bmeP_hPa = 0;   // Pressure   BME280 hPa
+  float bmeP_mmHg = 0;  // Pressure   BME280 mmHg
+  float calib = -0.77;
   float units = 0.0;
   float grams = 0.0;
   float g_eeprom = 0.0;
   float grms;
   float g_obnul = 0;
-  uint8_t voltage  = 10;
+  uint32_t voltage  = 0;
 };
 extern SNS sensors;
 //=======================================================================

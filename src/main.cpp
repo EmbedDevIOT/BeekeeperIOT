@@ -9,16 +9,19 @@
 #define EB_CLICK_TIME 100 // Button timeout
 #define DISP_TIME (tmrMin == 10 && tmrSec == 0)
 #define ITEMS 6 // Main Menu Items
+
 // GPIO PINs
 #define SET_PIN 18 // кнопкa Выбор
 #define PL_PIN 19  // кнопкa Плюс
 #define MN_PIN 5   // кнопкa Минус
 #define RELAY 23   // Реле
 #define DS_SNS 4   // ds18b20
-#define TX_PIN 17  // tx
-#define RX_PIN 16  // rx
-#define HX_DT 25   // HXT
-#define HX_CLK 26  // rx
+#define BAT 34     // Аккумулятор
+#define TX_PIN 17  // SIM800_TX
+#define RX_PIN 16  // SIM800_RX
+#define HX_DT 25   // HX711_DT
+#define HX_CLK 26  // HX711_CLK
+
 // I2C Adress
 #define BME_ADR 0x76
 #define OLED_ADR 0x3C
@@ -40,46 +43,43 @@ uint8_t disp_ptr = 0;
 uint8_t address[8]; // Создаем массив для адреса
 
 RTC_DATA_ATTR int bootCount = 0;
-const int oneWireBus = 4;
 //================================ OBJECTs =============================
 #define OLED_SOFT_BUFFER_64 // Буфер на стороне МК
 GyverOLED<SSD1306_128x64> disp;
 HX711 scale; //
 // Serial1 SIM800(TX_PIN, RX_PIN);
-// MicroDS18B20<23> ds18b20;
-// OneWire DS(DS_SNS);
 MicroDS3231 RTC; // 0x68
 GyverBME280 bme; // 0x76
 Button btUP(PL_PIN, INPUT_PULLUP);
 Button btSET(SET_PIN, INPUT_PULLUP);
 Button btDWN(MN_PIN, INPUT_PULLUP);
-// #define SEALEVELPRESSURE_HPA (1013.25)
-// Adafruit_BME280 bme; // I2C BUS_
 
 // Themperature sensor Dallas DS18b20
-OneWire oneWire(oneWireBus);
+OneWire oneWire(DS_SNS);
 DallasTemperature ds18b20(&oneWire);
 
 //=======================================================================
 
 //================================ PROTOTIPs =============================
 void I2C_Scanning(void);
-void StartingInfo();
-void DisplayUpd();
-void ButtonHandler();
-void BeekeeperConroller();
-void Task500ms();
-void Task1000ms();
+void StartingInfo(void);
+void DisplayUPD(void);
+void ButtonHandler(void);
+void BeekeeperConroller(void);
+void Task500ms(void);
+void Task1000ms(void);
 void ShowMainMenu(uint8_t item);
 void printPointer(uint8_t pointer);
 void MenuControl(void);
-void GetDSData();
-void GetBMEData();
-float readTemperature();
+void GetBatVoltage(void);
+void GetDSData(void);
+void GetBMEData(void);
+void ShowDBG(void);
+//=======================================================================
 
 void setup()
 {
-  Config.firmware = "0.5";
+  Config.firmware = "0.6";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(9600);
@@ -103,27 +103,11 @@ void setup()
   disp.init();
   disp.setContrast(255);
 
-  // bool status;
-  // status = bme.begin(0x76);
   bme.begin(0x76);
-  // Start the DS18B20 sensor
   ds18b20.begin();
-  // if (!status)
-  // {
-  //   Serial.println("Could not find a valid BME280 sensor, check wiring!");
-  //   while (1)
-  //     ;
-  // }
-  // bme.setSampling(Adafruit_BME280::MODE_FORCED,
-  //                 Adafruit_BME280::SAMPLING_X1,
-  //                 Adafruit_BME280::SAMPLING_X1,
-  //                 Adafruit_BME280::SAMPLING_X1,
-  //                 Adafruit_BME280::FILTER_OFF);
-
-  // bme.takeForcedMeasurement();
-  // uint32_t Pressure = bme.readPressure();
   delay(20);
 
+  pinMode(BAT, INPUT);
   // pinMode(RELAY, OUTPUT);
   // digitalWrite(RELAY, LOW);
 
@@ -139,7 +123,7 @@ void loop()
 
   if (System.DispState)
   {
-    DisplayUpd();
+    DisplayUPD();
   }
   else
     disp.setPower(false);
@@ -242,41 +226,49 @@ void ButtonHandler()
 // Get Data from BME Sensor
 void GetBmeData()
 {
-  // bme.takeForcedMeasurement();
   sensors.bmeT = bme.readTemperature();
-  sensors.bmeH = bme.readHumidity();
-  sensors.bmeP = bme.readPressure();
+  sensors.bmeH = bme.readHumidity() + sensors.bmeHcal;
+  sensors.bmeP_hPa = bme.readPressure();
+  // sensors.bmeP_hPa = sensors.bmeP_hPa / 100.0F;
+  sensors.bmeP_mmHg = pressureToMmHg(sensors.bmeP_hPa);
+  sensors.bmeA = pressureToAltitude(sensors.bmeP_hPa);
 
-  Serial.print("Temperature: ");
-  Serial.print(bme.readTemperature()); // Выводим темперутуру в [*C]
-  Serial.println(" *C");
+  // Serial.print("Temperature: ");
+  // Serial.print(bme.readTemperature()); // Выводим темперутуру в [*C]
+  // Serial.println(" *C");
 
-  Serial.print("Humidity: ");
-  Serial.print(bme.readHumidity()); // Выводим влажность в [%]
-  Serial.println(" %");
+  // Serial.print("Humidity: ");
+  // Serial.print(bme.readHumidity()); // Выводим влажность в [%]
+  // Serial.println(" %");
 
-  float pressure = bme.readPressure(); // Читаем давление в [Па]
-  Serial.print("Pressure: ");
-  Serial.print(pressure / 100.0F); // Выводим давление в [гПа]
-  Serial.print(" hPa , ");
-  Serial.print(pressureToMmHg(pressure)); // Выводим давление в [мм рт. столба]
-  Serial.println(" mm Hg");
-  Serial.print("Altitide: ");
-  Serial.print(pressureToAltitude(pressure)); // Выводим высоту в [м над ур. моря]
-  Serial.println(" m");
-  Serial.println("");
+  // float pressure = bme.readPressure(); // Читаем давление в [Па]
+  // Serial.print("Pressure: ");
+  // Serial.print(pressure / 100.0F); // Выводим давление в [гПа]
+  // Serial.print(" hPa , ");
+  // Serial.print(pressureToMmHg(pressure)); // Выводим давление в [мм рт. столба]
+  // Serial.println(" mm Hg");
+  // Serial.print("Altitide: ");
+  // Serial.print(pressureToAltitude(pressure)); // Выводим высоту в [м над ур. моря]
+  // Serial.println(" m");
+  // Serial.println("");
 }
+
 // Get Data from DS18B20 Sensor
 void GetDSData()
 {
   ds18b20.requestTemperatures();
   sensors.dsT = ds18b20.getTempCByIndex(0);
-  // Serial.print("Температура: ");
-  // Serial.print(temperature);
-  // Serial.println("°C");
 }
 
-void DisplayUpd()
+// Get Data from HX711
+void GetW()
+{  
+  scale.set_scale(sensors.calib);
+  sensors.units = scale.get_units(), 10;
+  sensors.grams = (sensors.units * 0.035274);
+}
+
+void DisplayUPD()
 {
 
   static uint32_t tmr;
@@ -315,8 +307,13 @@ void Task1000ms()
   if (millis() - tmr1000 >= 1000)
   {
     tmr1000 = millis();
-    // GetBmeData();
+
+    GetBatVoltage();
+    GetBmeData();
     GetDSData();
+
+    ShowDBG();
+
     if (System.DispState)
     {
       if (tmrSec < 59)
@@ -328,9 +325,6 @@ void Task1000ms()
         tmrSec = 0;
         tmrMin++;
       }
-      // sprintf(serbuf, "T:%02d:%02d", tmrMin, tmrSec);
-      // Serial.print(serbuf);
-      // Serial.println();
     }
 
     if DISP_TIME
@@ -510,6 +504,30 @@ void sendSMS(String phone, String message)
 
 void GetBatVoltage()
 {
+  uint32_t _mv = 0;
+  // 1250 = 10.8
+  // 1380 = 12.82
+
+  for (uint8_t i = 0; i <= 4; i++)
+  {
+    _mv += analogReadMilliVolts(BAT);
+  }
+  _mv = _mv / 4;
+
+  if (_mv == 0 || _mv < 1250)
+  {
+    _mv = 0;
+  }
+  else if (_mv >= 1250 && _mv <= 1480)
+  {
+    _mv = map(_mv, 1250, 1480, 10, 100);
+  }
+  else if (_mv > 1480)
+  {
+    _mv = 1480;
+    _mv = map(_mv, 1250, 1480, 10, 100);
+  }
+  sensors.voltage = _mv;
 }
 
 /* Method to print the reason by which ESP32
@@ -544,3 +562,24 @@ void print_wakeup_reason()
   }
 }
 
+void ShowDBG()
+{
+  char message[50];
+  uint8_t H = 0;
+
+  Serial.println(F("!!!!!!!!!!!!!!  DEBUG INFO  !!!!!!!!!!!!!!!!!!"));
+
+  sprintf(message, "TimeRTC: %02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
+  Serial.println(message);
+  sprintf(message, "T_DS:%0.2f *C", sensors.dsT);
+  Serial.println(message);
+  sprintf(message, "T_BME:%0.2f *C | H_BME:%0d % | P_BHE:%d", sensors.bmeT, (int)sensors.bmeH, (int)sensors.bmeP_mmHg);
+  Serial.println(message);
+  sprintf(message, "WEIGHT: %0.2fg | W_EEP: %0.2fg ", sensors.grams, sensors.g_eeprom);
+  Serial.println(message);
+  sprintf(message, "BAT: %003d", sensors.voltage);
+  Serial.println(message);
+
+  Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
+  Serial.println();
+}
