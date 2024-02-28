@@ -6,7 +6,7 @@
 #define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 5        /* Time ESP32 will go to sleep (in seconds) */
 
-#define EB_CLICK_TIME 100 // Button timeout
+// #define EB_CLICK_TIME 100 // Button timeout
 #define DISP_TIME (tmrMin == 10 && tmrSec == 0)
 #define ITEMS 6 // Main Menu Items
 
@@ -36,11 +36,17 @@ DateTime Clock;
 //=======================================================================
 
 //============================ GLOBAL VARIABLES =========================
-float temperature = 0.0;
+String _response = "";
+
+uint8_t task_counter = 0, task_cnt_10S = 0;
+
 uint16_t tmrSec = 0;
 uint16_t tmrMin = 0;
 uint8_t disp_ptr = 0;
 uint8_t address[8]; // Создаем массив для адреса
+
+String currStr = "";
+boolean isStringMessage = false;
 
 RTC_DATA_ATTR int bootCount = 0;
 //================================ OBJECTs =============================
@@ -68,6 +74,7 @@ void ButtonHandler(void);
 void BeekeeperConroller(void);
 void Task500ms(void);
 void Task1000ms(void);
+void Task1MIN(void);
 void ShowMainMenu(uint8_t item);
 void printPointer(uint8_t pointer);
 void MenuControl(void);
@@ -79,32 +86,54 @@ void ShowDBG(void);
 
 void setup()
 {
-  Config.firmware = "0.6";
+  Config.firmware = "0.7";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(9600);
-
-  Serial.println("Beekeeper");
-  Serial.printf("firmware: %s", Config.firmware);
-  Serial.println();
   Wire.begin();
+
   delay(20);
-  I2C_Scanning();
-  delay(2000);
+  // I2C_Scanning();
+  // delay(2000);
+
+  // EEPROM Init
+  EEPROM.begin(10);
+  if (EEPROM.read(0) != 200)
+  {
+    EEPROM.put(0, sensors.calib);
+    EEPROM.write(0, 200);
+    EEPROM.commit();
+    Serial.println(F("EEPROM put"));
+  }
+  EEPROM.get(0, sensors.calib);
+  Serial.println(F("EEPROM get Data"));
+  // HX711 Init
+  scale.begin(HX_DT, HX_CLK);
+  scale.set_scale();
+  scale.tare();
+  long zero_factor = scale.read_average();
+  Serial.println(F("HX711 Done"));
   // byte errSPIFFS = SPIFFS.begin(true);
   // Serial.println(F("SPIFFS...init"));
   // LoadConfig();
 
+  // RTC INIT
   byte errRTC = RTC.begin();
   Clock = RTC.getTime();
-  Serial.println(F("RTC...init"));
+  Serial.println(F("RTC...Done"));
 
-  scale.begin(HX_DT, HX_CLK); // HX
+  // OLED INIT
   disp.init();
   disp.setContrast(255);
+  disp.clear();
+  disp.update();
+  Serial.println(F("OLED...Done"));
 
+  // BME and DS SENSOR INIT
   bme.begin(0x76);
+  Serial.println(F("BME...Done"));
   ds18b20.begin();
+  Serial.println(F("DS18b20...Done"));
   delay(20);
 
   pinMode(BAT, INPUT);
@@ -113,22 +142,42 @@ void setup()
 
   StartingInfo();
   delay(1500);
+  // SIM800 INIT
+
+  // delay(15000);
+  delay(2000);
+  // SIM800.begin(9600);
+
+  // sendATCommand("AT", true);
+  // sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
+
+  // _response = sendATCommand("AT+CMGF=1;&W", true);
+  // _response = sendATCommand("AT+IFC=1, 1", true);
+  // _response = sendATCommand("AT+CPBS=\"SM\"", true);
+  // _response = sendATCommand("AT+CLIP=1", true); // Включаем АОН
+  // _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
+  // delay(10);
+
   disp.clear();
+
+  GetBatVoltage();
+  GetBMEData();
+  GetDSData();
 }
 
 void loop()
 {
+  ButtonHandler();
   Task500ms();
   Task1000ms();
+  Task1MIN();
 
-  if (System.DispState)
-  {
-    DisplayUPD();
-  }
-  else
-    disp.setPower(false);
-
-  ButtonHandler();
+  // if (System.DispState)
+  // {
+  //   DisplayUPD();
+  // }
+  // else
+  //   disp.setPower(false);
 
   // BeekeeperConroller();
 
@@ -156,16 +205,20 @@ void StartingInfo()
 {
   disp.clear();     // очистка
   disp.setScale(2); // масштаб текста (1..4)
-  // oled.home();      // курсор в 0,0
-  disp.setCursor(10, 0);
-  disp.print("Beekeeper");
-  delay(1000);
-  disp.setScale(1);
-  // курсор на начало 3 строки
-  disp.setCursor(0, 3);
-  disp.printf("fw:%s", Config.firmware);
 
+  disp.setCursor(10, 3);
+  disp.print("Beekeeper");
+  Serial.println("Beekeeper");
+  disp.setScale(1);
+
+  // курсор на начало 3 строки
+  disp.setCursor(20, 7);
+  disp.printf("firmware: %s", Config.firmware);
+  Serial.printf("firmware: %s", Config.firmware);
+  Serial.println();
   disp.update();
+
+  delay(1000);
 }
 
 void ButtonHandler()
@@ -177,61 +230,61 @@ void ButtonHandler()
   btUP.tick();
   btDWN.tick();
 
-  while (btSET.busy())
+  // while (btSET.busy())
+  // {
+  //   btSET.tick();
+  if (btSET.click() || btSET.hold())
   {
-    btSET.tick();
-    if (btSET.click())
-    {
-      Serial.println("State: BTN_ SET_ Click");
-      System.DispMenu == 0 ? System.DispMenu = 1 : System.DispMenu = 0;
-      disp.clear();
-      disp.home();
-      // System.RelayState = !System.RelayState;
-    }
+    Serial.println("State: BTN_ SET_ Click");
+    System.DispMenu == 0 ? System.DispMenu = 1 : System.DispMenu = 0;
+    disp.setPower(true);
+    System.DispState = true;
+    tmrMin = 0;
+    tmrSec = 0;
+    disp.clear();
+    disp.home();
+    // System.RelayState = !System.RelayState;
   }
+  // }
 
-  while (btUP.busy())
+  // while (btUP.busy())
+  // {
+  // btUP.tick();
+  if (btUP.click() || btUP.hold())
   {
-    btUP.tick();
-    if (btUP.click())
-    {
-      Serial.println("State: BTN_UP_ Click");
-      disp.setPower(true);
-      System.DispState = true;
-      tmrMin = 0;
-      tmrSec = 0;
-      // Уменьшаем указатель на 1, и если он стал меньше 1, присваиваем указателю ITEM - 1
-      disp_ptr = constrain(disp_ptr - 1, 0, ITEMS - 1); // Двигаем указатель в пределах дисплея
+    Serial.println("State: BTN_UP_ Click");
+    // Уменьшаем указатель на 1, и если он стал меньше 1, присваиваем указателю ITEM - 1
+    disp_ptr = constrain(disp_ptr - 1, 0, ITEMS - 1); // Двигаем указатель в пределах дисплея
 
-      Serial.printf("ptr:%d", disp_ptr);
-      Serial.println();
-    }
+    Serial.printf("ptr:%d", disp_ptr);
+    Serial.println();
   }
+  // }
 
-  while (btDWN.busy())
+  // while (btDWN.busy())
+  // {
+  //   btDWN.tick();
+  if (btDWN.click() || btDWN.hold())
   {
-    btDWN.tick();
-    if (btDWN.click())
-    {
-      Serial.println("State: BTN_DWN_ Click");
+    Serial.println("State: BTN_DWN_ Click");
 
-      disp_ptr = constrain(disp_ptr + 1, 0, ITEMS - 1);
+    disp_ptr = constrain(disp_ptr + 1, 0, ITEMS - 1);
 
-      Serial.printf("ptr:%d", disp_ptr);
-      Serial.println();
-    }
+    Serial.printf("ptr:%d", disp_ptr);
+    Serial.println();
   }
+  // }
 }
 
 // Get Data from BME Sensor
-void GetBmeData()
+void GetBMEData()
 {
   sensors.bmeT = bme.readTemperature();
-  sensors.bmeH = bme.readHumidity() + sensors.bmeHcal;
+  sensors.bmeH = (int)bme.readHumidity() + sensors.bmeHcal;
   sensors.bmeP_hPa = bme.readPressure();
   // sensors.bmeP_hPa = sensors.bmeP_hPa / 100.0F;
-  sensors.bmeP_mmHg = pressureToMmHg(sensors.bmeP_hPa);
-  sensors.bmeA = pressureToAltitude(sensors.bmeP_hPa);
+  sensors.bmeP_mmHg = (int)pressureToMmHg(sensors.bmeP_hPa);
+  // sensors.bmeA = pressureToAltitude(sensors.bmeP_hPa);
 
   // Serial.print("Temperature: ");
   // Serial.print(bme.readTemperature()); // Выводим темперутуру в [*C]
@@ -262,22 +315,23 @@ void GetDSData()
 
 // Get Data from HX711
 void GetW()
-{  
+{
   scale.set_scale(sensors.calib);
   sensors.units = scale.get_units(), 10;
   sensors.grams = (sensors.units * 0.035274);
 }
 
+// System Display Update (every 100 ms)
 void DisplayUPD()
 {
+  // static uint32_t tmr;
 
-  static uint32_t tmr;
+  // if (millis() - tmr >= 1000)
+  // {
+  //   tmr = millis();
 
-  if (millis() - tmr >= 50)
-  {
-    tmr = millis();
-    ShowMainMenu(System.DispMenu);
-  }
+  ShowMainMenu(System.DispMenu);
+  // }
 }
 
 void Task500ms()
@@ -308,14 +362,14 @@ void Task1000ms()
   {
     tmr1000 = millis();
 
-    GetBatVoltage();
-    GetBmeData();
-    GetDSData();
+    task_counter++;
 
     ShowDBG();
 
     if (System.DispState)
     {
+      DisplayUPD();
+
       if (tmrSec < 59)
       {
         tmrSec++;
@@ -324,6 +378,7 @@ void Task1000ms()
       {
         tmrSec = 0;
         tmrMin++;
+        disp.setPower(false);
       }
     }
 
@@ -335,6 +390,17 @@ void Task1000ms()
       tmrMin = 0;
       tmrSec = 0;
     }
+  }
+}
+
+void Task1MIN()
+{
+  if (task_counter == 60)
+  {
+    task_counter = 0;
+    GetBatVoltage();
+    GetBMEData();
+    GetDSData();
   }
 }
 
@@ -405,17 +471,28 @@ void ShowMainMenu(uint8_t item)
 
     sprintf(dispbuf, "%02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
     disp.setScale(2);
-    disp.setCursor(15, 0);
+    disp.setCursor(17, 0);
     disp.print(dispbuf);
     disp.update();
 
-    sprintf(dispbuf, "W:%0.1f T1:%0.1f", 10.3, sensors.dsT);
+    sprintf(dispbuf, "%0.1f", sensors.grms);
+    disp.setScale(3);
+    disp.setCursor(29, 2);
+    // disp.setScale(1);
+    // disp.setCursor(5, 2);
+    disp.print(dispbuf);
+    disp.update();
+
+    sprintf(dispbuf, "T1:%0.1fC    T2:%0.1fC", sensors.dsT, sensors.bmeT);
     disp.setScale(1);
-    disp.setCursor(5, 2);
+    disp.setCursor(5, 6);
     disp.print(dispbuf);
     disp.update();
 
-    // sprintf(dispbuf, "T1:%0.1fC T2:%0.1fC H:%0.1f% P:%3dkPa", sensors.dsT, sensors.bmeT, sensors.bmeH, sensors.bmeP);
+    sprintf(dispbuf, "H:%02d           P:%003d", sensors.bmeH, sensors.bmeP_mmHg);
+    disp.setCursor(5, 7);
+    disp.print(dispbuf);
+    disp.update();
     break;
 
   case Time:
