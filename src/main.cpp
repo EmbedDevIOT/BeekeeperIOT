@@ -39,7 +39,7 @@ DateTime Clock;
 String _response = "";
 
 uint8_t task_counter = 0, task_cnt_10S = 0;
-float Calibration_Factor_Of_Load_cell = -57039;
+float Calibration_Factor_Of_Load_cell = 23850;//-31;
 
 uint32_t now;
 
@@ -90,7 +90,7 @@ void ShowDBG(void);
 
 void setup()
 {
-  Config.firmware = "0.8.1";
+  Config.firmware = "0.8.2";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(9600);
@@ -113,12 +113,47 @@ void setup()
   // Serial.println(F("EEPROM get Data"));
   // HX711 Init
   scale.begin(HX_DT, HX_CLK);
-  scale.set_scale();
-  scale.tare();
-  long zero_factor = scale.read_average();
-  Serial.print("Zero factor: ");
-  Serial.println(zero_factor);
-  Serial.println(F("HX711 Done"));
+  // scale.set_scale();
+  // scale.tare();
+  // long zero_factor = scale.get_units(10);
+  // Serial.print("Zero factor: ");
+  // Serial.println(zero_factor / 1000);
+
+  // Serial.println(F("HX711 Done"));
+
+  // Serial.println("Before setting up the scale:");
+  // Serial.print("read: \t\t");
+  // Serial.println(scale.read()); // print a raw reading from the ADC
+
+  // Serial.print("read average: \t\t");
+  // Serial.println(scale.read_average(20)); // print the average of 20 readings from the ADC
+
+  // Serial.print("get value: \t\t");
+  // Serial.println(scale.get_value(5)); // print the average of 5 readings from the ADC minus the tare weight (not set yet)
+
+  // Serial.print("get units: \t\t");
+  // Serial.println(scale.get_units(5), 1); // print the average of 5 readings from the ADC minus tare weight (not set) divided
+  //                                        // by the SCALE parameter (not set yet)
+
+  scale.set_scale(Calibration_Factor_Of_Load_cell / 1000);
+  scale.tare(); // reset the scale to 0
+
+  // Serial.println("After setting up the scale:");
+
+  // Serial.print("read: \t\t");
+  // Serial.println(scale.read()); // print a raw reading from the ADC
+
+  // Serial.print("read average: \t\t");
+  // Serial.println(scale.read_average(20)); // print the average of 20 readings from the ADC
+
+  // Serial.print("get value: \t\t");
+  // Serial.println(scale.get_value(5)); // print the average of 5 readings from the ADC minus the tare weight, set with tare()
+
+  // Serial.print("get units: \t\t");
+  // Serial.println(scale.get_units(5), 1); // print the average of 5 readings from the ADC minus tare weight, divided
+  //                                        // by the SCALE parameter set with set_scale
+
+  // Serial.println("Readings:");
   // // RTC INIT
   // byte errRTC = RTC.begin();
   // Clock = RTC.getTime();
@@ -183,35 +218,41 @@ void loop()
 
   // BeekeeperConroller();
 
-  scale.set_scale(Calibration_Factor_Of_Load_cell); // Отрегулируйте этот калибровочный коэффициент
-  sensors.units = scale.get_units();
-  if (sensors.units < 0)
-  {
-    sensors.units = 0.00;
-  }
-  sensors.grams = sensors.units * 0.035274;
+  // scale.set_scale(Calibration_Factor_Of_Load_cell); // Отрегулируйте этот калибровочный коэффициент
+  // sensors.units = scale.get_units();
+  // if (sensors.units < 0)
+  // {
+  //   sensors.units = 0.00;
+  // }
+  // sensors.grams = sensors.units * 0.035274;
 
   static uint32_t _tmr;
 
   if (millis() - _tmr >= 1000)
   {
     _tmr = millis();
-    Serial.print("Reading: ");
-    Serial.print(sensors.grams);
-    Serial.print(" grams");
-    Serial.print(" Calibration_Factor_Of_Load_cell: ");
-    Serial.print(Calibration_Factor_Of_Load_cell);
-    Serial.println();
+    // sensors.units = scale.get_units(10);
+    // if (sensors.units < 0)
+    // {
+    //   sensors.units = 0.00;
+    // }
+    // sensors.grams = sensors.units * 0.035274;
+    Serial.print("one reading:\t");
+    // Serial.println(sensors.grams);
+    // Serial.print("one reading:\t");
+    Serial.print(scale.get_units(), 1);
+    Serial.print("\t| average:\t");
+    Serial.println(scale.get_units(10), 5);
   }
 
-  if (Serial.available())
-  {
-    char temp = Serial.read();
-    if (temp == '+' || temp == 'a')
-      Calibration_Factor_Of_Load_cell += 1;
-    else if (temp == '-' || temp == 'z')
-      Calibration_Factor_Of_Load_cell-= 1;
-  }
+  // if (Serial.available())
+  // {
+  //   char temp = Serial.read();
+  //   if (temp == '+' || temp == 'a')
+  //     Calibration_Factor_Of_Load_cell += 1;
+  //   else if (temp == '-' || temp == 'z')
+  //     Calibration_Factor_Of_Load_cell -= 1;
+  // }
 
   // if (scale.is_ready())
   // {
