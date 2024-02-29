@@ -39,6 +39,7 @@ DateTime Clock;
 String _response = "";
 
 uint8_t task_counter = 0, task_cnt_10S = 0;
+float Calibration_Factor_Of_Load_cell = -57039;
 
 uint32_t now;
 
@@ -95,60 +96,58 @@ void setup()
   Serial1.begin(9600);
   Wire.begin();
 
-  delay(20);
-  // I2C_Scanning();
-  // delay(2000);
+  // delay(20);
+  // // I2C_Scanning();
+  // // delay(2000);
 
-  // EEPROM Init
-  EEPROM.begin(10);
-  if (EEPROM.read(0) != 200)
-  {
-    EEPROM.put(0, sensors.calib);
-    EEPROM.write(0, 200);
-    EEPROM.commit();
-    Serial.println(F("EEPROM put"));
-  }
-  EEPROM.get(0, sensors.calib);
-  Serial.println(F("EEPROM get Data"));
+  // // EEPROM Init
+  // EEPROM.begin(10);
+  // if (EEPROM.read(0) != 200)
+  // {
+  //   EEPROM.put(0, sensors.calib);
+  //   EEPROM.write(0, 200);
+  //   EEPROM.commit();
+  //   Serial.println(F("EEPROM put"));
+  // }
+  // EEPROM.get(0, sensors.calib);
+  // Serial.println(F("EEPROM get Data"));
   // HX711 Init
   scale.begin(HX_DT, HX_CLK);
   scale.set_scale();
   scale.tare();
   long zero_factor = scale.read_average();
+  Serial.print("Zero factor: ");
+  Serial.println(zero_factor);
   Serial.println(F("HX711 Done"));
-  // byte errSPIFFS = SPIFFS.begin(true);
-  // Serial.println(F("SPIFFS...init"));
-  // LoadConfig();
+  // // RTC INIT
+  // byte errRTC = RTC.begin();
+  // Clock = RTC.getTime();
+  // Serial.println(F("RTC...Done"));
 
-  // RTC INIT
-  byte errRTC = RTC.begin();
-  Clock = RTC.getTime();
-  Serial.println(F("RTC...Done"));
+  // // OLED INIT
+  // disp.init();
+  // disp.setContrast(255);
+  // disp.clear();
+  // disp.update();
+  // Serial.println(F("OLED...Done"));
 
-  // OLED INIT
-  disp.init();
-  disp.setContrast(255);
-  disp.clear();
-  disp.update();
-  Serial.println(F("OLED...Done"));
+  // // BME and DS SENSOR INIT
+  // bme.begin(0x76);
+  // Serial.println(F("BME...Done"));
+  // ds18b20.begin();
+  // Serial.println(F("DS18b20...Done"));
+  // delay(20);
 
-  // BME and DS SENSOR INIT
-  bme.begin(0x76);
-  Serial.println(F("BME...Done"));
-  ds18b20.begin();
-  Serial.println(F("DS18b20...Done"));
-  delay(20);
+  // pinMode(BAT, INPUT);
+  // // pinMode(RELAY, OUTPUT);
+  // // digitalWrite(RELAY, LOW);
 
-  pinMode(BAT, INPUT);
-  // pinMode(RELAY, OUTPUT);
-  // digitalWrite(RELAY, LOW);
+  // StartingInfo();
+  // delay(1500);
+  // // SIM800 INIT
 
-  StartingInfo();
-  delay(1500);
-  // SIM800 INIT
-
-  // delay(15000);
-  delay(2000);
+  // // delay(15000);
+  // delay(2000);
   // SIM800.begin(9600);
 
   // sendATCommand("AT", true);
@@ -161,19 +160,19 @@ void setup()
   // _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
   // delay(10);
 
-  disp.clear();
+  // disp.clear();
 
-  GetBatVoltage();
-  GetBMEData();
-  GetDSData();
+  // GetBatVoltage();
+  // GetBMEData();
+  // GetDSData();
 }
 
 void loop()
 {
-  ButtonHandler();
-  Task500ms();
-  Task1000ms();
-  Task1MIN();
+  // ButtonHandler();
+  // Task500ms();
+  // Task1000ms();
+  // Task1MIN();
 
   // if (System.DispState)
   // {
@@ -183,6 +182,36 @@ void loop()
   //   disp.setPower(false);
 
   // BeekeeperConroller();
+
+  scale.set_scale(Calibration_Factor_Of_Load_cell); // Отрегулируйте этот калибровочный коэффициент
+  sensors.units = scale.get_units();
+  if (sensors.units < 0)
+  {
+    sensors.units = 0.00;
+  }
+  sensors.grams = sensors.units * 0.035274;
+
+  static uint32_t _tmr;
+
+  if (millis() - _tmr >= 1000)
+  {
+    _tmr = millis();
+    Serial.print("Reading: ");
+    Serial.print(sensors.grams);
+    Serial.print(" grams");
+    Serial.print(" Calibration_Factor_Of_Load_cell: ");
+    Serial.print(Calibration_Factor_Of_Load_cell);
+    Serial.println();
+  }
+
+  if (Serial.available())
+  {
+    char temp = Serial.read();
+    if (temp == '+' || temp == 'a')
+      Calibration_Factor_Of_Load_cell += 1;
+    else if (temp == '-' || temp == 'z')
+      Calibration_Factor_Of_Load_cell-= 1;
+  }
 
   // if (scale.is_ready())
   // {
@@ -713,7 +742,7 @@ void ShowDBG()
 
   Serial.println(F("!!!!!!!!!!!!!!  DEBUG INFO  !!!!!!!!!!!!!!!!!!"));
 
-  sprintf(message, "DISP:%d | ML %d | T: %02d:%02d ", System.DispState,System.DispMenu, tmrMin, tmrSec);
+  sprintf(message, "DISP:%d | ML %d | T: %02d:%02d ", System.DispState, System.DispMenu, tmrMin, tmrSec);
   Serial.println(message);
 
   sprintf(message, "TimeRTC: %02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);

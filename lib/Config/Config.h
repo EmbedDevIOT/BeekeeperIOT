@@ -109,7 +109,7 @@ struct SNS
   float bmeA = 0.0;     // Altitude   BME280 m
   float bmeP_hPa = 0;   // Pressure   BME280 hPa
   int bmeP_mmHg = 0;  // Pressure   BME280 mmHg
-  float calib = -0.77;
+  float calib = -57147; // 0.77
   float units = 0.0;
   float grams = 0.0;
   float g_eeprom = 0.0;
