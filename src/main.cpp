@@ -40,6 +40,8 @@ String _response = "";
 
 uint8_t task_counter = 0, task_cnt_10S = 0;
 
+uint32_t now;
+
 uint16_t tmrSec = 0;
 uint16_t tmrMin = 0;
 uint8_t disp_ptr = 0;
@@ -59,6 +61,7 @@ GyverBME280 bme; // 0x76
 Button btUP(PL_PIN, INPUT_PULLUP);
 Button btSET(SET_PIN, INPUT_PULLUP);
 Button btDWN(MN_PIN, INPUT_PULLUP);
+VirtButton btVirt;
 
 // Themperature sensor Dallas DS18b20
 OneWire oneWire(DS_SNS);
@@ -86,7 +89,7 @@ void ShowDBG(void);
 
 void setup()
 {
-  Config.firmware = "0.7";
+  Config.firmware = "0.8.1";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(9600);
@@ -229,20 +232,64 @@ void ButtonHandler()
   btSET.tick();
   btUP.tick();
   btDWN.tick();
+  btVirt.tick(btUP, btDWN);
 
   // while (btSET.busy())
   // {
   //   btSET.tick();
-  if (btSET.click() || btSET.hold())
+  if (btSET.click())
   {
-    Serial.println("State: BTN_ SET_ Click");
-    System.DispMenu == 0 ? System.DispMenu = 1 : System.DispMenu = 0;
-    disp.setPower(true);
-    System.DispState = true;
+    // Serial.println("State: BTN_ SET_ Click");
+
+    if (System.DispState == true)
+    {
+      if (System.DispMenu == Menu && disp_ptr == 0)
+      {
+        System.DispMenu = Time;
+        Serial.println("Set Time");
+      }
+
+      if (System.DispMenu == Menu && disp_ptr == 1)
+      {
+        System.DispMenu = Date;
+        Serial.println("Set Date");
+      }
+
+      if (System.DispMenu == Menu && disp_ptr == 2)
+      {
+        System.DispMenu = Calib;
+        Serial.println("Set Calibration");
+      }
+
+      if (System.DispMenu == Menu && disp_ptr == 3)
+      {
+        System.DispMenu = Notifycation;
+        Serial.println("Set Notifycation");
+      }
+
+      if (System.DispMenu == Menu && disp_ptr == 4)
+      {
+        System.DispMenu = Battery;
+        Serial.println("Set Battery");
+      }
+
+      if (System.DispMenu == Menu && disp_ptr == 5)
+      {
+        System.DispMenu = Action;
+        Serial.println("Exit");
+      }
+      // System.DispMenu == Menu ? System.DispMenu = Action : System.DispMenu = Menu;
+    }
+    else
+    {
+      disp.setPower(true);
+      System.DispMenu = Action;
+      System.DispState = true;
+    }
+
     tmrMin = 0;
     tmrSec = 0;
     disp.clear();
-    disp.home();
     // System.RelayState = !System.RelayState;
   }
   // }
@@ -252,13 +299,23 @@ void ButtonHandler()
   // btUP.tick();
   if (btUP.click() || btUP.hold())
   {
-    Serial.println("State: BTN_UP_ Click");
-    // Уменьшаем указатель на 1, и если он стал меньше 1, присваиваем указателю ITEM - 1
-    disp_ptr = constrain(disp_ptr - 1, 0, ITEMS - 1); // Двигаем указатель в пределах дисплея
+    Serial.println("BTN_UP");
+    tmrMin = 0;
+    tmrSec = 0;
+    if (System.DispMenu == Menu)
+      disp_ptr = constrain(disp_ptr - 1, 0, ITEMS - 1);
 
     Serial.printf("ptr:%d", disp_ptr);
     Serial.println();
   }
+
+  if (btVirt.click())
+  {
+    Serial.println("BTN_UP and BTN_DWN");
+    System.DispMenu = SetZero;
+    disp.clear();
+  }
+
   // }
 
   // while (btDWN.busy())
@@ -267,8 +324,11 @@ void ButtonHandler()
   if (btDWN.click() || btDWN.hold())
   {
     Serial.println("State: BTN_DWN_ Click");
+    tmrMin = 0;
+    tmrSec = 0;
 
-    disp_ptr = constrain(disp_ptr + 1, 0, ITEMS - 1);
+    if (System.DispMenu == Menu)
+      disp_ptr = constrain(disp_ptr + 1, 0, ITEMS - 1);
 
     Serial.printf("ptr:%d", disp_ptr);
     Serial.println();
@@ -285,25 +345,6 @@ void GetBMEData()
   // sensors.bmeP_hPa = sensors.bmeP_hPa / 100.0F;
   sensors.bmeP_mmHg = (int)pressureToMmHg(sensors.bmeP_hPa);
   // sensors.bmeA = pressureToAltitude(sensors.bmeP_hPa);
-
-  // Serial.print("Temperature: ");
-  // Serial.print(bme.readTemperature()); // Выводим темперутуру в [*C]
-  // Serial.println(" *C");
-
-  // Serial.print("Humidity: ");
-  // Serial.print(bme.readHumidity()); // Выводим влажность в [%]
-  // Serial.println(" %");
-
-  // float pressure = bme.readPressure(); // Читаем давление в [Па]
-  // Serial.print("Pressure: ");
-  // Serial.print(pressure / 100.0F); // Выводим давление в [гПа]
-  // Serial.print(" hPa , ");
-  // Serial.print(pressureToMmHg(pressure)); // Выводим давление в [мм рт. столба]
-  // Serial.println(" mm Hg");
-  // Serial.print("Altitide: ");
-  // Serial.print(pressureToAltitude(pressure)); // Выводим высоту в [м над ур. моря]
-  // Serial.println(" m");
-  // Serial.println("");
 }
 
 // Get Data from DS18B20 Sensor
@@ -318,6 +359,8 @@ void GetW()
 {
   scale.set_scale(sensors.calib);
   sensors.units = scale.get_units(), 10;
+  if (sensors.units < 0)
+    sensors.units = 0;
   sensors.grams = (sensors.units * 0.035274);
 }
 
@@ -363,12 +406,14 @@ void Task1000ms()
     tmr1000 = millis();
 
     task_counter++;
+    GetW();
 
     ShowDBG();
 
     if (System.DispState)
     {
-      DisplayUPD();
+      // DisplayUPD();
+      ShowMainMenu(System.DispMenu);
 
       if (tmrSec < 59)
       {
@@ -378,9 +423,11 @@ void Task1000ms()
       {
         tmrSec = 0;
         tmrMin++;
-        disp.setPower(false);
+        // disp.setPower(false);
       }
     }
+    else
+      disp.setPower(false);
 
     if DISP_TIME
     {
@@ -475,7 +522,7 @@ void ShowMainMenu(uint8_t item)
     disp.print(dispbuf);
     disp.update();
 
-    sprintf(dispbuf, "%0.1f", sensors.grms);
+    sprintf(dispbuf, "%0.2f", sensors.grams);
     disp.setScale(3);
     disp.setCursor(29, 2);
     // disp.setScale(1);
@@ -489,10 +536,30 @@ void ShowMainMenu(uint8_t item)
     disp.print(dispbuf);
     disp.update();
 
-    sprintf(dispbuf, "H:%02d           P:%003d", sensors.bmeH, sensors.bmeP_mmHg);
+    sprintf(dispbuf, "H:%02d U:%003d P:%003d", sensors.bmeH, sensors.voltage, sensors.bmeP_mmHg);
     disp.setCursor(5, 7);
     disp.print(dispbuf);
     disp.update();
+    break;
+
+  case SetZero:
+    disp.clear();
+    disp.setScale(2);
+    disp.setCursor(1, 1);
+    disp.print(F(
+        " Установка \r\n"
+        "   нуля \r\n"
+        " подождите..  \r\n"));
+    disp.update();
+
+    now = millis();
+    while (millis() - now < 5000)
+    {
+      // тут в течение 5000 миллисекунд вертится код
+      // удобно использовать для всяких калибровок
+    }
+    System.DispMenu = Action;
+    disp.clear();
     break;
 
   case Time:
@@ -504,6 +571,7 @@ void ShowMainMenu(uint8_t item)
   case Calib:
 
     break;
+
   case Notifycation:
 
     break;
@@ -642,9 +710,11 @@ void print_wakeup_reason()
 void ShowDBG()
 {
   char message[50];
-  uint8_t H = 0;
 
   Serial.println(F("!!!!!!!!!!!!!!  DEBUG INFO  !!!!!!!!!!!!!!!!!!"));
+
+  sprintf(message, "DISP:%d | ML %d | T: %02d:%02d ", System.DispState,System.DispMenu, tmrMin, tmrSec);
+  Serial.println(message);
 
   sprintf(message, "TimeRTC: %02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
   Serial.println(message);
@@ -652,7 +722,7 @@ void ShowDBG()
   Serial.println(message);
   sprintf(message, "T_BME:%0.2f *C | H_BME:%0d % | P_BHE:%d", sensors.bmeT, (int)sensors.bmeH, (int)sensors.bmeP_mmHg);
   Serial.println(message);
-  sprintf(message, "WEIGHT: %0.2fg | W_EEP: %0.2fg ", sensors.grams, sensors.g_eeprom);
+  sprintf(message, "WEIGHT: %0.2fg | W_CAL: %0.2fg  | W_EEP: %f", sensors.grams, sensors.calib, sensors.g_eeprom);
   Serial.println(message);
   sprintf(message, "BAT: %003d", sensors.voltage);
   Serial.println(message);

@@ -51,8 +51,9 @@ extern DateTime Clock;
 //=======================================================================
 enum menu
 {
-  Menu = 0,
+  Menu = 1,
   Action,
+  SetZero,
   Time,
   Date,
   Calib,
