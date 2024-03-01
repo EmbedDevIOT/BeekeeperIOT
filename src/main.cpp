@@ -90,141 +90,171 @@ void ShowDBG(void);
 
 void setup()
 {
-  Config.firmware = "0.8.3";
+  Config.firmware = "0.8.4";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
   Wire.begin();
 
+  // OLED INIT
+  disp.init();
+  disp.setContrast(255);
+  disp.clear();
+  disp.update();
+  Serial.println(F("OLED...Done"));
+  // StartingInfo();
+  // delay(1500);
+
   // HX711 Init
   scale.begin(HX_DT, HX_CLK);
+
   // EEPROM Init
-  // EEPROM.begin(10);
-  // if (EEPROM.read(4) != CALL_DONE)
+  // ADRs: 0 - Calibration 4 - State_Calibration (Done or False) 5 - FirstStart State
+  EEPROM.begin(10);
 
   // Если Весы не откалиброваны
-  if (ST.Calibration != CALL_DONE)
+  // if (ST.Calibration != CALL_DONE)
+  disp.setScale(2); // масштаб текста (1..4)
+  disp.setCursor(13, 3);
+  disp.print("Загрузка");
+  disp.update();
+
+  Serial.print("Reading Calibration State to EEPROM: ");
+  ST.Calibration = EEPROM.read(4);
+  Serial.print(ST.Calibration);
+  Serial.println();
+
+  // if (EEPROM.read(4) != EEP_DONE)
+  if (ST.Calibration != EEP_DONE)
   {
-    // Данные с датчика прочитаны
-    // if (scale.is_ready())
-    // {
-      scale.set_scale();
-      Serial.println("1. Tare... remove any weights from the scale.");
-      delay(5000);
-      scale.tare();
-      Serial.println("2. Tare done...");
-      Serial.print("3. Place a known weight on the scale...");
-      delay(5000);
-      sensors.calib = scale.get_units(10);
-      sensors.calib = sensors.calib / 1000;
-      Serial.println("4.Zero factor: ");
-      Serial.print(sensors.calib);
-      Serial.println();
-      Serial.println(F("-= Zero Factor Done =-"));
-      ST.Calibration = CALL_DONE;
-      // EEPROM.put(0, sensors.calib);
-      // EEPROM.write(4, CALL_DONE);
-      // EEPROM.commit();
-      // Serial.println(F("EEPROM: First Callibration Done"));
-    // }
-    // else // Данные с датчика недоступны
-    // {
-    //   Serial.println("HX711 not found.");
-    //   // ST.Calibration = CALL_FAIL;
-    // }
+    bool st = true;
+    scale.set_scale();
+    Serial.println("1. Tare... remove any weights from the scale...and PRESS to SET button");
+
+    disp.clear();
+    disp.setScale(2); // масштаб текста (1..4)
+    disp.setCursor(10, 2);
+    disp.print("#Калибровка#");
+    disp.update();
+
+    disp.setScale(1);
+    disp.setCursor(1, 1);
+    disp.print(F(
+        "Освободите\r\n"
+        "платформу и\r\n"
+        "нажмите кнопку ОК\r\n"));
+    disp.update();
+
+    while (st)
+    {
+      btSET.tick();
+      if (btSET.click())
+      {
+        st = false;
+        scale.tare();
+        Serial.println("Tare DONE...");
+      }
+    }
+
+    disp.clear();
+    disp.setScale(2); // масштаб текста (1..4)
+    disp.setCursor(10, 2);
+    disp.print("#Калибровка#");
+    disp.update();
+
+    disp.setScale(1);
+    disp.setCursor(1, 1);
+    disp.print(F(
+        "Пометите груз весом\r\n"
+        "1кг платформу и\r\n"
+        "нажмите кнопку ОК\r\n"));
+    disp.update();
+
+    Serial.print("2. Place a known weight on the scale...and PRESS to SET button");
+    st = true;
+    while (st)
+    {
+      btSET.tick();
+      if (btSET.click())
+      {
+        st = false;
+        sensors.calib = scale.get_units(10);
+        sensors.calib = sensors.calib / 1000;
+      }
+    }
+    // sensors.calib = scale.get_units(10);
+    // sensors.calib = sensors.calib / 1000;
+    Serial.println("4.Zero factor: ");
+    Serial.print(sensors.calib);
+    Serial.println();
+
+    disp.clear();
+    disp.setScale(2); // масштаб текста (1..4)
+    disp.setCursor(10, 2);
+    disp.print(F(
+        "#Калибровка# \r\n"
+        " выполнена \r\n"));
+    disp.update();
+
+    Serial.println(F("-= Calibration Done =-"));
+    ST.Calibration = EEP_DONE;
+    EEPROM.put(0, sensors.calib);
+    EEPROM.commit();
+    EEPROM.put(4, EEP_DONE);
+    // EEPROM.write(4, EEP_DONE);
+    EEPROM.commit();
   }
   else
   {
-    // EEPROM.get(0, sensors.calib);
+    Serial.println("Reading Calibration factor to EEPROM");
+    EEPROM.get(0, sensors.calib);
     // scale.set_scale(sensors.calib);
-    Serial.printf("EEPROM: get Data (%f)", sensors.calib);
+    Serial.printf("EEPROM: Calib: %f", sensors.calib);
     Serial.println();
   }
 
   delay(5000);
+
+  EEPROM.get(5, ST.FirstStart);
+  Serial.printf("EEPROM: StartST: %d", ST.FirstStart);
+  Serial.println();
+
   // Первый запуск устройства. и калибровка ОК. Обнуление
-  if (ST.FirstStart && ST.Calibration == CALL_DONE)
+  if (ST.FirstStart != EEP_DONE && ST.Calibration == EEP_DONE)
   {
     Serial.println(F("First Starting..Zeroing"));
-    // if (scale.is_ready(sensors.calib))
-    // {
-    // Serial.println("Tare... remove any weights from the scale.");
     scale.set_scale(sensors.calib);
     scale.tare();
-    // }
-    // else // Данные недоступны
-    // {
-    //   Serial.println("HX711 not found.");
-    // }
-    Serial.println(F("-=Zeroing Done=-"));
+
+    ST.FirstStart = EEP_DONE;
+    EEPROM.write(5, ST.FirstStart);
+    EEPROM.commit();
+
+    Serial.println(F("-=First Start Done=-"));
   }
+  else
+  {
+    scale.set_scale(sensors.calib);
+    Serial.println(F("Set_scale"));
+    scale.tare();
+    scale.power_down();
+  }
+  // RTC INIT
+  byte errRTC = RTC.begin();
+  Clock = RTC.getTime();
+  Serial.println(F("RTC...Done"));
 
-  // scale.set_scale();
-  // scale.tare();
-  // long zero_factor = scale.get_units(10);
-  // Serial.print("Zero factor: ");
-  // Serial.println(zero_factor / 1000);
+  // BME and DS SENSOR INIT
+  bme.begin(0x76);
+  Serial.println(F("BME...Done"));
+  ds18b20.begin();
+  Serial.println(F("DS18b20...Done"));
+  delay(20);
 
-  // Serial.println(F("HX711 Done"));
-
-  // Serial.println("Before setting up the scale:");
-  // Serial.print("read: \t\t");
-  // Serial.println(scale.read()); // print a raw reading from the ADC
-
-  // Serial.print("read average: \t\t");
-  // Serial.println(scale.read_average(20)); // print the average of 20 readings from the ADC
-
-  // Serial.print("get value: \t\t");
-  // Serial.println(scale.get_value(5)); // print the average of 5 readings from the ADC minus the tare weight (not set yet)
-
-  // Serial.print("get units: \t\t");
-  // Serial.println(scale.get_units(5), 1); // print the average of 5 readings from the ADC minus tare weight (not set) divided
-  //                                        // by the SCALE parameter (not set yet)
-
-  // scale.set_scale(Calibration_Factor_Of_Load_cell / 1000);
-  // scale.tare(); // reset the scale to 0
-
-  // Serial.println("After setting up the scale:");
-
-  // Serial.print("read: \t\t");
-  // Serial.println(scale.read()); // print a raw reading from the ADC
-
-  // Serial.print("read average: \t\t");
-  // Serial.println(scale.read_average(20)); // print the average of 20 readings from the ADC
-
-  // Serial.print("get value: \t\t");
-  // Serial.println(scale.get_value(5)); // print the average of 5 readings from the ADC minus the tare weight, set with tare()
-
-  // Serial.print("get units: \t\t");
-  // Serial.println(scale.get_units(5), 1); // print the average of 5 readings from the ADC minus tare weight, divided
-  //                                        // by the SCALE parameter set with set_scale
-
-  // Serial.println("Readings:");
-  // // RTC INIT
-  // byte errRTC = RTC.begin();
-  // Clock = RTC.getTime();
-  // Serial.println(F("RTC...Done"));
-
-  // // OLED INIT
-  // disp.init();
-  // disp.setContrast(255);
-  // disp.clear();
-  // disp.update();
-  // Serial.println(F("OLED...Done"));
-
-  // // BME and DS SENSOR INIT
-  // bme.begin(0x76);
-  // Serial.println(F("BME...Done"));
-  // ds18b20.begin();
-  // Serial.println(F("DS18b20...Done"));
-  // delay(20);
-
-  // pinMode(BAT, INPUT);
+  pinMode(BAT, INPUT);
   // // pinMode(RELAY, OUTPUT);
   // // digitalWrite(RELAY, LOW);
 
-  // StartingInfo();
-  // delay(1500);
   // // SIM800 INIT
 
   // // delay(15000);
@@ -241,19 +271,19 @@ void setup()
   // _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
   // delay(10);
 
-  // disp.clear();
+  disp.clear();
 
-  // GetBatVoltage();
-  // GetBMEData();
-  // GetDSData();
+  GetBatVoltage();
+  GetBMEData();
+  GetDSData();
 }
 
 void loop()
 {
-  // ButtonHandler();
-  // Task500ms();
-  // Task1000ms();
-  // Task1MIN();
+  ButtonHandler();
+  Task500ms();
+  Task1000ms();
+  Task1MIN();
 
   // if (System.DispState)
   // {
@@ -263,42 +293,6 @@ void loop()
   //   disp.setPower(false);
 
   // BeekeeperConroller();
-
-  // scale.set_scale(Calibration_Factor_Of_Load_cell); // Отрегулируйте этот калибровочный коэффициент
-  // sensors.units = scale.get_units();
-  // if (sensors.units < 0)
-  // {
-  //   sensors.units = 0.00;
-  // }
-  // sensors.grams = sensors.units * 0.035274;
-
-  static uint32_t _tmr;
-  char msg[24];
-
-  if ((ST.Calibration == CALL_DONE) && millis() - _tmr >= 1000)
-  {
-    _tmr = millis();
-
-    sensors.units = scale.get_units(10);
-    if (sensors.units < 0)
-    {
-      sensors.units = 0.00;
-    }
-    sensors.kg = sensors.units / 1000;
-
-    sprintf(msg, "W: %0.1fg ", sensors.units);
-    Serial.println(msg);
-    Serial.print(sensors.kg, 1);
-    Serial.println();
-
-    // sensors.grams = sensors.units * 0.035274;
-    // Serial.print("one reading:\t");
-    // // Serial.println(sensors.grams);
-    // // Serial.print("one reading:\t");
-    // Serial.print(scale.get_units());
-    // Serial.print("\t| average:\t");
-    // Serial.println(scale.get_units(10), 5);
-  }
 
   // if (Serial.available())
   // {
@@ -482,11 +476,33 @@ void GetDSData()
 // Get Data from HX711
 void GetW()
 {
-  scale.set_scale(sensors.calib);
-  sensors.units = scale.get_units(), 10;
+  // static uint32_t _tmr;
+  char msg[24];
+
+  // if ((ST.Calibration == EEP_DONE) && millis() - _tmr >= 1000)
+  // {
+  //   _tmr = millis();
+  scale.power_up();
+  sensors.units = scale.get_units(10);
+  scale.power_down();
+
   if (sensors.units < 0)
-    sensors.units = 0;
-  sensors.grams = (sensors.units * 0.035274);
+  {
+    sensors.units = 0.00;
+  }
+  sensors.kg = sensors.units / 1000;
+
+  // sprintf(msg, "W: %0.1fg ", sensors.units);
+  // Serial.println(msg);
+  // Serial.print(sensors.kg, 1);
+  // Serial.println();
+  // }
+
+  // scale.set_scale(sensors.calib);
+  // sensors.units = scale.get_units(), 10;
+  // if (sensors.units < 0)
+  //   sensors.units = 0;
+  // sensors.grams = (sensors.units * 0.035274);
 }
 
 // System Display Update (every 100 ms)
@@ -531,7 +547,9 @@ void Task1000ms()
     tmr1000 = millis();
 
     task_counter++;
-    GetW();
+
+    if (ST.Calibration == EEP_DONE)
+      GetW();
 
     ShowDBG();
 
@@ -647,7 +665,7 @@ void ShowMainMenu(uint8_t item)
     disp.print(dispbuf);
     disp.update();
 
-    sprintf(dispbuf, "%0.2f", sensors.grams);
+    sprintf(dispbuf, "%0.1f", sensors.kg);
     disp.setScale(3);
     disp.setCursor(29, 2);
     // disp.setScale(1);
@@ -661,7 +679,7 @@ void ShowMainMenu(uint8_t item)
     disp.print(dispbuf);
     disp.update();
 
-    sprintf(dispbuf, "H:%02d U:%003d P:%003d", sensors.bmeH, sensors.voltage, sensors.bmeP_mmHg);
+    sprintf(dispbuf, "H:%02d   U:%003d   P:%003d", sensors.bmeH, sensors.voltage, sensors.bmeP_mmHg);
     disp.setCursor(5, 7);
     disp.print(dispbuf);
     disp.update();

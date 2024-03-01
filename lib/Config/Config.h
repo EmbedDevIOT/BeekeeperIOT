@@ -27,7 +27,13 @@
 #define WiFi_
 
 #define CALL_FAIL 0
-#define CALL_DONE 1
+#define EEP_DONE 200
+
+#define E_UW 6
+#define E_Start 5
+#define E_SCal 4
+#define E_Cal 0
+
 
 #define WiFiTimeON 15
 #define Client 0
@@ -61,6 +67,7 @@ enum menu
   Battery,
   IDLE
 };
+
 //=======================================================================
 
 //=========================== GLOBAL CONFIG =============================
@@ -109,7 +116,7 @@ struct SNS
   float bmeA = 0.0;     // Altitude   BME280 m
   float bmeP_hPa = 0;   // Pressure   BME280 hPa
   int bmeP_mmHg = 0;  // Pressure   BME280 mmHg
-  long calib = 23850; // 0.77
+  float calib = 23850; // 0.77
   float units = 0.0;
   float kg = 0.0;
   float grams = 0.0;
@@ -124,8 +131,8 @@ extern SNS sensors;
 //=======================================================================
 struct Flag
 {
-  bool FirstStart = true;
-  bool Calibration = false;
+  uint8_t FirstStart = 0;
+  uint8_t Calibration = 0;
 };
 extern Flag ST;
 //============================================================================
