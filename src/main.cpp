@@ -137,6 +137,7 @@ void setup()
     disp.print("#Калибровка#");
     disp.update();
 
+    disp.clear();
     disp.setScale(1);
     disp.setCursor(1, 1);
     disp.print(F(
@@ -162,6 +163,7 @@ void setup()
     disp.print("#Калибровка#");
     disp.update();
 
+    disp.clear();
     disp.setScale(1);
     disp.setCursor(1, 1);
     disp.print(F(
@@ -477,7 +479,7 @@ void GetDSData()
 void GetW()
 {
   // static uint32_t _tmr;
-  char msg[24];
+  // char msg[24];
 
   // if ((ST.Calibration == EEP_DONE) && millis() - _tmr >= 1000)
   // {
@@ -865,7 +867,7 @@ void ShowDBG()
   Serial.println(message);
   sprintf(message, "T_BME:%0.2f *C | H_BME:%0d % | P_BHE:%d", sensors.bmeT, (int)sensors.bmeH, (int)sensors.bmeP_mmHg);
   Serial.println(message);
-  sprintf(message, "WEIGHT: %0.2fg | W_CAL: %0.2fg  | W_EEP: %f", sensors.grams, sensors.calib, sensors.g_eeprom);
+  sprintf(message, "WEIGHT: %0.1fg | W_CAL: %0.2fg  | W_EEP: %f", sensors.kg, sensors.calib);
   Serial.println(message);
   sprintf(message, "BAT: %003d", sensors.voltage);
   Serial.println(message);
