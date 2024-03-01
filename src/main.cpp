@@ -305,24 +305,6 @@ void loop()
   //     Calibration_Factor_Of_Load_cell -= 1;
   // }
 
-  // if (scale.is_ready())
-  // {
-  //   scale.set_scale();
-  //   Serial.println("Tare... remove any weights from the scale.");
-  //   delay(5000);
-  //   scale.tare();
-  //   Serial.println("Tare done...");
-  //   Serial.print("Place a known weight on the scale...");
-  //   delay(5000);
-  //   long reading = scale.get_units(10);
-  //   Serial.print("Result: ");
-  //   Serial.println(reading);
-  // }
-  // else
-  // {
-  //   Serial.println("HX711 not found.");
-  // }
-  // delay(1000);
 }
 
 void StartingInfo()
@@ -663,13 +645,13 @@ void ShowMainMenu(uint8_t item)
 
     sprintf(dispbuf, "%02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
     disp.setScale(2);
-    disp.setCursor(17, 0);
+    disp.setCursor(20, 0);
     disp.print(dispbuf);
     disp.update();
 
     sprintf(dispbuf, "%0.1f", sensors.kg);
     disp.setScale(3);
-    disp.setCursor(29, 2);
+    disp.setCursor(37, 2);
     // disp.setScale(1);
     // disp.setCursor(5, 2);
     disp.print(dispbuf);
