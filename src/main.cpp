@@ -33,13 +33,14 @@ GlobalConfig Config;
 SNS sensors;
 SYTM System;
 DateTime Clock;
+Flag ST;
 //=======================================================================
 
 //============================ GLOBAL VARIABLES =========================
 String _response = "";
 
 uint8_t task_counter = 0, task_cnt_10S = 0;
-float Calibration_Factor_Of_Load_cell = 23850;//-31;
+float Calibration_Factor_Of_Load_cell = 23850; //-31;
 
 uint32_t now;
 
@@ -67,7 +68,6 @@ VirtButton btVirt;
 // Themperature sensor Dallas DS18b20
 OneWire oneWire(DS_SNS);
 DallasTemperature ds18b20(&oneWire);
-
 //=======================================================================
 
 //================================ PROTOTIPs =============================
@@ -90,29 +90,75 @@ void ShowDBG(void);
 
 void setup()
 {
-  Config.firmware = "0.8.2";
+  Config.firmware = "0.8.3";
 
   Serial.begin(UARTSpeed);
-  Serial1.begin(9600);
+  Serial1.begin(MODEMSpeed);
   Wire.begin();
 
-  // delay(20);
-  // // I2C_Scanning();
-  // // delay(2000);
-
-  // // EEPROM Init
-  // EEPROM.begin(10);
-  // if (EEPROM.read(0) != 200)
-  // {
-  //   EEPROM.put(0, sensors.calib);
-  //   EEPROM.write(0, 200);
-  //   EEPROM.commit();
-  //   Serial.println(F("EEPROM put"));
-  // }
-  // EEPROM.get(0, sensors.calib);
-  // Serial.println(F("EEPROM get Data"));
   // HX711 Init
   scale.begin(HX_DT, HX_CLK);
+  // EEPROM Init
+  // EEPROM.begin(10);
+  // if (EEPROM.read(4) != CALL_DONE)
+
+  // Если Весы не откалиброваны
+  if (ST.Calibration != CALL_DONE)
+  {
+    // Данные с датчика прочитаны
+    // if (scale.is_ready())
+    // {
+      scale.set_scale();
+      Serial.println("1. Tare... remove any weights from the scale.");
+      delay(5000);
+      scale.tare();
+      Serial.println("2. Tare done...");
+      Serial.print("3. Place a known weight on the scale...");
+      delay(5000);
+      sensors.calib = scale.get_units(10);
+      sensors.calib = sensors.calib / 1000;
+      Serial.println("4.Zero factor: ");
+      Serial.print(sensors.calib);
+      Serial.println();
+      Serial.println(F("-= Zero Factor Done =-"));
+      ST.Calibration = CALL_DONE;
+      // EEPROM.put(0, sensors.calib);
+      // EEPROM.write(4, CALL_DONE);
+      // EEPROM.commit();
+      // Serial.println(F("EEPROM: First Callibration Done"));
+    // }
+    // else // Данные с датчика недоступны
+    // {
+    //   Serial.println("HX711 not found.");
+    //   // ST.Calibration = CALL_FAIL;
+    // }
+  }
+  else
+  {
+    // EEPROM.get(0, sensors.calib);
+    // scale.set_scale(sensors.calib);
+    Serial.printf("EEPROM: get Data (%f)", sensors.calib);
+    Serial.println();
+  }
+
+  delay(5000);
+  // Первый запуск устройства. и калибровка ОК. Обнуление
+  if (ST.FirstStart && ST.Calibration == CALL_DONE)
+  {
+    Serial.println(F("First Starting..Zeroing"));
+    // if (scale.is_ready(sensors.calib))
+    // {
+    // Serial.println("Tare... remove any weights from the scale.");
+    scale.set_scale(sensors.calib);
+    scale.tare();
+    // }
+    // else // Данные недоступны
+    // {
+    //   Serial.println("HX711 not found.");
+    // }
+    Serial.println(F("-=Zeroing Done=-"));
+  }
+
   // scale.set_scale();
   // scale.tare();
   // long zero_factor = scale.get_units(10);
@@ -135,8 +181,8 @@ void setup()
   // Serial.println(scale.get_units(5), 1); // print the average of 5 readings from the ADC minus tare weight (not set) divided
   //                                        // by the SCALE parameter (not set yet)
 
-  scale.set_scale(Calibration_Factor_Of_Load_cell / 1000);
-  scale.tare(); // reset the scale to 0
+  // scale.set_scale(Calibration_Factor_Of_Load_cell / 1000);
+  // scale.tare(); // reset the scale to 0
 
   // Serial.println("After setting up the scale:");
 
@@ -227,22 +273,31 @@ void loop()
   // sensors.grams = sensors.units * 0.035274;
 
   static uint32_t _tmr;
+  char msg[24];
 
-  if (millis() - _tmr >= 1000)
+  if ((ST.Calibration == CALL_DONE) && millis() - _tmr >= 1000)
   {
     _tmr = millis();
-    // sensors.units = scale.get_units(10);
-    // if (sensors.units < 0)
-    // {
-    //   sensors.units = 0.00;
-    // }
+
+    sensors.units = scale.get_units(10);
+    if (sensors.units < 0)
+    {
+      sensors.units = 0.00;
+    }
+    sensors.kg = sensors.units / 1000;
+
+    sprintf(msg, "W: %0.1fg ", sensors.units);
+    Serial.println(msg);
+    Serial.print(sensors.kg, 1);
+    Serial.println();
+
     // sensors.grams = sensors.units * 0.035274;
-    Serial.print("one reading:\t");
-    // Serial.println(sensors.grams);
     // Serial.print("one reading:\t");
-    Serial.print(scale.get_units(), 1);
-    Serial.print("\t| average:\t");
-    Serial.println(scale.get_units(10), 5);
+    // // Serial.println(sensors.grams);
+    // // Serial.print("one reading:\t");
+    // Serial.print(scale.get_units());
+    // Serial.print("\t| average:\t");
+    // Serial.println(scale.get_units(10), 5);
   }
 
   // if (Serial.available())

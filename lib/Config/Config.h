@@ -3,9 +3,7 @@
 
 #include <Arduino.h>
 
-// #include <WiFi.h>
-// #include <WebServer.h>
-// #include <ElegantOTA.h>
+
 // #include "FileConfig.h"
 #include <ArduinoJson.h>
 #include "SPIFFS.h"
@@ -16,8 +14,6 @@
 #include <Wire.h>
 #include <GyverBME280.h>     
 
-// #include "Adafruit_BME280.h"
-// #include <Adafruit_Sensor.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
@@ -26,8 +22,12 @@
 #include <GyverOLED.h>
 
 #define UARTSpeed 115200
+#define MODEMSpeed 9600
 
 #define WiFi_
+
+#define CALL_FAIL 0
+#define CALL_DONE 1
 
 #define WiFiTimeON 15
 #define Client 0
@@ -109,8 +109,9 @@ struct SNS
   float bmeA = 0.0;     // Altitude   BME280 m
   float bmeP_hPa = 0;   // Pressure   BME280 hPa
   int bmeP_mmHg = 0;  // Pressure   BME280 mmHg
-  float calib = -57147; // 0.77
+  long calib = 23850; // 0.77
   float units = 0.0;
+  float kg = 0.0;
   float grams = 0.0;
   float g_eeprom = 0.0;
   float grms = 10.5;
@@ -123,10 +124,10 @@ extern SNS sensors;
 //=======================================================================
 struct Flag
 {
-  bool Start : 1;
-  bool WiFiEnable : 1;
+  bool FirstStart = true;
+  bool Calibration = false;
 };
-extern Flag FlagState;
+extern Flag ST;
 //============================================================================
 
 //============================================================================
