@@ -80,12 +80,13 @@ void BeekeeperConroller(void);
 void Task500ms(void);
 void Task1000ms(void);
 void Task1MIN(void);
-void ShowMainMenu(uint8_t item);
+void DisplayHandler(uint8_t item);
 void printPointer(uint8_t pointer);
 void MenuControl(void);
 void GetBatVoltage(void);
 void GetDSData(void);
 void GetBMEData(void);
+void GetWeight(void);
 void ShowDBG(void);
 void task0(void);
 void task1(void);
@@ -93,9 +94,72 @@ void task2(void);
 void task3(void);
 //=======================================================================
 
+//=======================   I2C Scanner     =============================
+void I2C_Scanning(void)
+{
+  byte error, address;
+  int nDevices;
+
+  Serial.println("Scanning...");
+
+  nDevices = 0;
+  for (address = 8; address < 127; address++)
+  {
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+
+    if (error == 0)
+    {
+      Serial.print("I2C device found at address 0x");
+      if (address < 16)
+        Serial.print("0");
+      Serial.print(address, HEX);
+      Serial.println(" !");
+
+      nDevices++;
+    }
+    else if (error == 4)
+    {
+      Serial.print("Unknow error at address 0x");
+      if (address < 16)
+        Serial.print("0");
+      Serial.println(address, HEX);
+    }
+  }
+  if (nDevices == 0)
+    Serial.println("No I2C devices found\n");
+  else
+    Serial.println("done\n");
+}
+//=======================================================================
+
+//=======================================================================
+void StartingInfo()
+{
+  disp.clear();     // очистка
+  disp.setScale(2); // масштаб текста (1..4)
+
+  disp.setCursor(10, 3);
+  disp.print("Beekeeper");
+  Serial.println("Beekeeper");
+  disp.setScale(1);
+
+  // курсор на начало 3 строки
+  disp.setCursor(20, 7);
+  disp.printf("firmware: %s", Config.firmware);
+  Serial.printf("firmware: %s", Config.firmware);
+  Serial.println();
+  disp.update();
+
+  delay(1000);
+  disp.clear();
+}
+//=======================================================================
+
+//=======================       SETUP     =============================
 void setup()
 {
-  Config.firmware = "0.8.4";
+  Config.firmware = "0.8.5";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -107,7 +171,7 @@ void setup()
   disp.clear();
   disp.update();
   Serial.println(F("OLED...Done"));
-  // StartingInfo();
+  StartingInfo();
   // delay(1500);
 
   // HX711 Init
@@ -220,7 +284,7 @@ void setup()
     Serial.println();
   }
 
-  delay(5000);
+  delay(2000);
 
   EEPROM.get(5, ST.FirstStart);
   Serial.printf("EEPROM: StartST: %d", ST.FirstStart);
@@ -269,7 +333,6 @@ void setup()
   // // digitalWrite(RELAY, LOW);
 
   // // SIM800 INIT
-
   // // delay(15000);
   // delay(2000);
   // SIM800.begin(9600);
@@ -295,7 +358,9 @@ void setup()
   os.attach(2, task2, 1000);
   os.attach(3, task3, 1000);
 }
+//=======================================================================
 
+//=======================================================================
 void loop()
 {
   os.tick();
@@ -303,14 +368,7 @@ void loop()
   // Task500ms();
   // Task1000ms();
   // Task1MIN();
-
-  // if (System.DispState)
-  // {
-  //   DisplayUPD();
-  // }
-  // else
-  //   disp.setPower(false);
-
+  //
   // BeekeeperConroller();
 
   // if (Serial.available())
@@ -323,26 +381,6 @@ void loop()
   // }
 }
 
-void StartingInfo()
-{
-  disp.clear();     // очистка
-  disp.setScale(2); // масштаб текста (1..4)
-
-  disp.setCursor(10, 3);
-  disp.print("Beekeeper");
-  Serial.println("Beekeeper");
-  disp.setScale(1);
-
-  // курсор на начало 3 строки
-  disp.setCursor(20, 7);
-  disp.printf("firmware: %s", Config.firmware);
-  Serial.printf("firmware: %s", Config.firmware);
-  Serial.println();
-  disp.update();
-
-  delay(1000);
-}
-
 void ButtonHandler()
 {
   uint16_t value = 0;
@@ -353,12 +391,9 @@ void ButtonHandler()
   btDWN.tick();
   btVirt.tick(btUP, btDWN);
 
-  // while (btSET.busy())
-  // {
-  //   btSET.tick();
   if (btSET.click())
   {
-    // Serial.println("State: BTN_ SET_ Click");
+    Serial.println("State: BTN_ SET_ Click");
 
     if (System.DispState == true)
     {
@@ -411,11 +446,7 @@ void ButtonHandler()
     disp.clear();
     // System.RelayState = !System.RelayState;
   }
-  // }
 
-  // while (btUP.busy())
-  // {
-  // btUP.tick();
   if (btUP.click() || btUP.hold())
   {
     Serial.println("BTN_UP");
@@ -435,11 +466,6 @@ void ButtonHandler()
     disp.clear();
   }
 
-  // }
-
-  // while (btDWN.busy())
-  // {
-  //   btDWN.tick();
   if (btDWN.click() || btDWN.hold())
   {
     Serial.println("State: BTN_DWN_ Click");
@@ -452,7 +478,6 @@ void ButtonHandler()
     Serial.printf("ptr:%d", disp_ptr);
     Serial.println();
   }
-  // }
 }
 
 // Get Data from BME Sensor
@@ -474,7 +499,7 @@ void GetDSData()
 }
 
 // Get Data from HX711
-void GetW()
+void GetWeight()
 {
   // static uint32_t _tmr;
   // char msg[24];
@@ -506,17 +531,17 @@ void GetW()
 }
 
 // System Display Update (every 100 ms)
-void DisplayUPD()
-{
-  // static uint32_t tmr;
+// void DisplayUPD()
+// {
+//   // static uint32_t tmr;
 
-  // if (millis() - tmr >= 1000)
-  // {
-  //   tmr = millis();
+//   // if (millis() - tmr >= 1000)
+//   // {
+//   //   tmr = millis();
 
-  ShowMainMenu(System.DispMenu);
-  // }
-}
+//   DisplayHandler(System.DispMenu);
+//   // }
+// }
 
 void Task500ms()
 {
@@ -526,6 +551,8 @@ void Task500ms()
   {
     tmr500 = millis();
     Clock = RTC.getTime();
+
+    GetWeight();
 
     if (System.RelayState)
     {
@@ -549,14 +576,13 @@ void Task1000ms()
     task_counter++;
 
     if (ST.Calibration == EEP_DONE)
-      GetW();
+      // GetW();
 
-    ShowDBG();
+      ShowDBG();
 
     if (System.DispState)
     {
-      // DisplayUPD();
-      ShowMainMenu(System.DispMenu);
+      DisplayHandler(System.DispMenu);
 
       if (tmrSec < 59)
       {
@@ -594,48 +620,8 @@ void Task1MIN()
   }
 }
 
-/**************************************** Scanning I2C bus *********************************************/
-void I2C_Scanning(void)
-{
-  byte error, address;
-  int nDevices;
-
-  Serial.println("Scanning...");
-
-  nDevices = 0;
-  for (address = 8; address < 127; address++)
-  {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-
-    if (error == 0)
-    {
-      Serial.print("I2C device found at address 0x");
-      if (address < 16)
-        Serial.print("0");
-      Serial.print(address, HEX);
-      Serial.println(" !");
-
-      nDevices++;
-    }
-    else if (error == 4)
-    {
-      Serial.print("Unknow error at address 0x");
-      if (address < 16)
-        Serial.print("0");
-      Serial.println(address, HEX);
-    }
-  }
-  if (nDevices == 0)
-    Serial.println("No I2C devices found\n");
-  else
-    Serial.println("done\n");
-
-  // delay(5000);
-}
-/*******************************************************************************************************/
 /******************************************* MAIN_MENU *************************************************/
-void ShowMainMenu(uint8_t item)
+void DisplayHandler(uint8_t item)
 {
   switch (item)
   {
@@ -663,21 +649,18 @@ void ShowMainMenu(uint8_t item)
     disp.setScale(2);
     disp.setCursor(20, 0);
     disp.print(dispbuf);
-    disp.update();
 
     sprintf(dispbuf, "%0.1f", sensors.kg);
     disp.setScale(3);
     disp.setCursor(37, 2);
-    // disp.setScale(1);
-    // disp.setCursor(5, 2);
     disp.print(dispbuf);
-    disp.update();
+    // disp.update();
 
     sprintf(dispbuf, "T1:%0.1fC    T2:%0.1fC", sensors.dsT, sensors.bmeT);
     disp.setScale(1);
     disp.setCursor(5, 6);
     disp.print(dispbuf);
-    disp.update();
+    // disp.update();
 
     sprintf(dispbuf, "H:%02d   U:%003d   P:%003d", sensors.bmeH, sensors.voltage, sensors.bmeP_mmHg);
     disp.setCursor(5, 7);
@@ -880,23 +863,24 @@ void task0()
   GetBatVoltage();
   GetBMEData();
   GetDSData();
+  if (ST.Calibration == EEP_DONE)
+    GetWeight();
 }
 
-// Every 500ms (RTC)
+// Every 500ms (RTC) and HX711
 void task1()
 {
   Clock = RTC.getTime();
 }
 
-// Display
+// Display Control
 void task2()
 {
-  if (ST.Calibration == EEP_DONE)
-    GetW();
+  // task_counter++;
+
   if (System.DispState)
   {
-    // DisplayUPD();
-    ShowMainMenu(System.DispMenu);
+    DisplayHandler(System.DispMenu);
 
     if (tmrSec < 59)
     {
@@ -906,7 +890,6 @@ void task2()
     {
       tmrSec = 0;
       tmrMin++;
-      // disp.setPower(false);
     }
   }
   else
@@ -914,7 +897,6 @@ void task2()
 
   if DISP_TIME
   {
-    // disp.setPower(false);
     System.DispState = false;
     Serial.println("TimeOut: Display - OFF");
     tmrMin = 0;
@@ -925,5 +907,6 @@ void task2()
 // debug
 void task3()
 {
+  Serial.println("Task _ 3");
   ShowDBG();
 }
