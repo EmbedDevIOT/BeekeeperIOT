@@ -5,6 +5,7 @@
 
 
 // #include "FileConfig.h"
+#include <GyverOS.h>
 #include <ArduinoJson.h>
 #include "SPIFFS.h"
 #include <EEPROM.h>

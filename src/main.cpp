@@ -56,6 +56,7 @@ RTC_DATA_ATTR int bootCount = 0;
 //================================ OBJECTs =============================
 #define OLED_SOFT_BUFFER_64 // Буфер на стороне МК
 GyverOLED<SSD1306_128x64> disp;
+GyverOS<3> os;
 HX711 scale; //
 // Serial1 SIM800(TX_PIN, RX_PIN);
 MicroDS3231 RTC; // 0x68
@@ -86,6 +87,10 @@ void GetBatVoltage(void);
 void GetDSData(void);
 void GetBMEData(void);
 void ShowDBG(void);
+void task0(void);
+void task1(void);
+void task2(void);
+void task3(void);
 //=======================================================================
 
 void setup()
@@ -241,8 +246,14 @@ void setup()
     scale.tare();
     scale.power_down();
   }
+
+  RTC.begin();
   // RTC INIT
-  byte errRTC = RTC.begin();
+  if (RTC.lostPower())
+  {                            //  при потере питания
+    RTC.setTime(COMPILE_TIME); // установить время компиляции
+  }
+
   Clock = RTC.getTime();
   Serial.println(F("RTC...Done"));
 
@@ -278,14 +289,20 @@ void setup()
   GetBatVoltage();
   GetBMEData();
   GetDSData();
+
+  os.attach(0, task0, 5000);
+  os.attach(1, task1, 500);
+  os.attach(2, task2, 1000);
+  os.attach(3, task3, 1000);
 }
 
 void loop()
 {
+  os.tick();
   ButtonHandler();
-  Task500ms();
-  Task1000ms();
-  Task1MIN();
+  // Task500ms();
+  // Task1000ms();
+  // Task1MIN();
 
   // if (System.DispState)
   // {
@@ -304,7 +321,6 @@ void loop()
   //   else if (temp == '-' || temp == 'z')
   //     Calibration_Factor_Of_Load_cell -= 1;
   // }
-
 }
 
 void StartingInfo()
@@ -856,4 +872,58 @@ void ShowDBG()
 
   Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
   Serial.println();
+}
+
+// Every 5 seconds  (get data from sensors)
+void task0()
+{
+  GetBatVoltage();
+  GetBMEData();
+  GetDSData();
+}
+
+// Every 500ms (RTC)
+void task1()
+{
+  Clock = RTC.getTime();
+}
+
+// Display
+void task2()
+{
+  if (ST.Calibration == EEP_DONE)
+    GetW();
+  if (System.DispState)
+  {
+    // DisplayUPD();
+    ShowMainMenu(System.DispMenu);
+
+    if (tmrSec < 59)
+    {
+      tmrSec++;
+    }
+    else
+    {
+      tmrSec = 0;
+      tmrMin++;
+      // disp.setPower(false);
+    }
+  }
+  else
+    disp.setPower(false);
+
+  if DISP_TIME
+  {
+    // disp.setPower(false);
+    System.DispState = false;
+    Serial.println("TimeOut: Display - OFF");
+    tmrMin = 0;
+    tmrSec = 0;
+  }
+}
+
+// debug
+void task3()
+{
+  ShowDBG();
 }
