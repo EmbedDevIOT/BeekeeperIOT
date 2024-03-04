@@ -182,7 +182,6 @@ void setup()
   EEPROM.begin(10);
 
   // Если Весы не откалиброваны
-  // if (ST.Calibration != CALL_DONE)
   disp.setScale(2); // масштаб текста (1..4)
   disp.setCursor(13, 3);
   disp.print("Загрузка");
