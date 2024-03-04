@@ -58,6 +58,7 @@ RTC_DATA_ATTR int bootCount = 0;
 GyverOLED<SSD1306_128x64> disp;
 GyverOS<3> os;
 HX711 scale; //
+HardwareSerial SIM800(1);
 // Serial1 SIM800(TX_PIN, RX_PIN);
 MicroDS3231 RTC; // 0x68
 GyverBME280 bme; // 0x76
@@ -82,8 +83,12 @@ void Task1000ms(void);
 void Task1MIN(void);
 void DisplayHandler(uint8_t item);
 void printPointer(uint8_t pointer);
+String waitResponse(void);
+String sendATCommand(String cmd, bool waiting);
+void sendSMS(String phone, String message);
 void MenuControl(void);
 void GetBatVoltage(void);
+void IncommingRing(void);
 void GetDSData(void);
 void GetBMEData(void);
 void GetWeight(void);
@@ -159,7 +164,7 @@ void StartingInfo()
 //=======================       SETUP     =============================
 void setup()
 {
-  Config.firmware = "0.8.5";
+  Config.firmware = "0.8.6";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -332,19 +337,19 @@ void setup()
   // // pinMode(RELAY, OUTPUT);
   // // digitalWrite(RELAY, LOW);
 
-  // // SIM800 INIT
+  // SIM800 INIT
   // // delay(15000);
   // delay(2000);
-  // SIM800.begin(9600);
+  SIM800.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
 
-  // sendATCommand("AT", true);
-  // sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
+  sendATCommand("AT", true);
+  sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
 
-  // _response = sendATCommand("AT+CMGF=1;&W", true);
-  // _response = sendATCommand("AT+IFC=1, 1", true);
-  // _response = sendATCommand("AT+CPBS=\"SM\"", true);
-  // _response = sendATCommand("AT+CLIP=1", true); // Включаем АОН
-  // _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
+  _response = sendATCommand("AT+CMGF=1;&W", true);
+  _response = sendATCommand("AT+IFC=1, 1", true);
+  _response = sendATCommand("AT+CPBS=\"SM\"", true);
+  _response = sendATCommand("AT+CLIP=1", true); // Включаем АОН
+  _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
   // delay(10);
 
   disp.clear();
@@ -357,6 +362,15 @@ void setup()
   os.attach(1, task1, 500);
   os.attach(2, task2, 1000);
   os.attach(3, task3, 1000);
+  // for(;;)
+  // {
+  //   if (SIM800.available()) {
+  //   // Если есть данные для чтения из RS485
+  //   char data = SIM800.read();
+  //   Serial.print("Получили данные: ");
+  //   Serial.println(data);
+  //   }
+  // }
 }
 //=======================================================================
 
@@ -365,20 +379,12 @@ void loop()
 {
   os.tick();
   ButtonHandler();
+  // IncommingRing();
   // Task500ms();
   // Task1000ms();
   // Task1MIN();
   //
   // BeekeeperConroller();
-
-  // if (Serial.available())
-  // {
-  //   char temp = Serial.read();
-  //   if (temp == '+' || temp == 'a')
-  //     Calibration_Factor_Of_Load_cell += 1;
-  //   else if (temp == '-' || temp == 'z')
-  //     Calibration_Factor_Of_Load_cell -= 1;
-  // }
 }
 
 void ButtonHandler()
@@ -478,8 +484,85 @@ void ButtonHandler()
     Serial.printf("ptr:%d", disp_ptr);
     Serial.println();
   }
-}
 
+  if (btSET.hasClicks(2))
+  {
+    Serial.println("Has double cliks");
+    Serial.println("---------------------");
+
+    String sms = "Bec: ";
+
+    sms += String(sensors.kg, 1);
+    sms += " Kg";
+    sms += "\n";
+    sms += "B: ";
+    sms += sensors.voltage;
+    sms += " %";
+    sms += "\n";
+    sms += "T1: ";
+    sms += String(sensors.dsT, 1);
+    sms += " *C";
+    sms += "\n";
+    sms += "T2: ";
+    sms += String(sensors.bmeT, 1);
+    sms += " *C";
+    sms += "\n";
+    sms += "H: ";
+    sms += sensors.bmeH;
+    sms += " %";
+    sms += "\n";
+    sms += "Pr: ";
+    sms += sensors.bmeP_mmHg;
+
+    Serial.println(sms);
+    Serial.println("---------------------");
+
+    sendSMS(Config.phone, sms); 
+  }
+}
+void IncommingRing()
+{
+  if (SIM800.available())
+  {
+    _response = waitResponse();
+    _response.trim();
+    Serial.println(_response);
+    if (_response.startsWith("RING"))
+    {
+      int phoneindex = _response.indexOf("+CLIP: \"");
+      String innerPhone = "";
+      if (phoneindex >= 0)
+      {
+        phoneindex += 8;
+        innerPhone = _response.substring(phoneindex, _response.indexOf("\"", phoneindex));
+        Serial.println("Number: " + innerPhone);
+        delay(500);
+        sendATCommand("ATH", true);
+        delay(500);
+
+        String smska = "Bec: ";
+        smska += String(sensors.kg, 1);
+        smska += " Kg";
+        smska += "\n";
+        smska += "T1:";
+        smska += String(sensors.dsT, 1);
+        smska += "\n";
+        smska += "T2";
+        smska += String(sensors.bmeT, 1);
+        smska += "\n";
+        smska += "H:";
+        smska += String(sensors.bmeH, 1);
+        smska += "\n";
+        smska += "Pr:";
+        smska += String(sensors.bmeP_mmHg);
+
+        Serial.println(smska);
+        // sendSMS(innerPhone, smska); // смс
+        // delay(2000);
+      }
+    }
+  }
+}
 // Get Data from BME Sensor
 void GetBMEData()
 {
@@ -529,19 +612,6 @@ void GetWeight()
   //   sensors.units = 0;
   // sensors.grams = (sensors.units * 0.035274);
 }
-
-// System Display Update (every 100 ms)
-// void DisplayUPD()
-// {
-//   // static uint32_t tmr;
-
-//   // if (millis() - tmr >= 1000)
-//   // {
-//   //   tmr = millis();
-
-//   DisplayHandler(System.DispMenu);
-//   // }
-// }
 
 void Task500ms()
 {
@@ -736,17 +806,17 @@ String waitResponse()
 {
   String _resp = "";
   long _timeout = millis() + 10000;
-  // while (!SIM800.available() && millis() < _timeout)
-  // {
-  // };
-  // if (SIM800.available())
-  // {
-  //   _resp = SIM800.readString();
-  // }
-  // else
-  // {
-  //   Serial.println("Timeout...");
-  // }
+  while (!SIM800.available() && millis() < _timeout)
+  {
+  };
+  if (SIM800.available())
+  {
+    _resp = SIM800.readString();
+  }
+  else
+  {
+    Serial.println("Timeout...");
+  }
   return _resp;
 }
 
@@ -754,7 +824,7 @@ String sendATCommand(String cmd, bool waiting)
 {
   String _resp = "";
   Serial.println(cmd);
-  // SIM800.println(cmd);
+  SIM800.println(cmd);
   if (waiting)
   {
     _resp = waitResponse();
@@ -770,7 +840,7 @@ String sendATCommand(String cmd, bool waiting)
 void sendSMS(String phone, String message)
 {
   sendATCommand("AT+CMGS=\"" + phone + "\"", true);
-  sendATCommand(message + "\r\n" + (String)((char)26), true);
+  sendATCommand(message + "\r\n" + (String)((char)26), true); // 26
 }
 
 void GetBatVoltage()

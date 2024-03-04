@@ -458,7 +458,7 @@ void Timer()
       smska += String(bmeTemp, 1);
       smska += "\n";
       smska += "H ";
-      smska += String(bmeHum, 1);
+      smska += String(bmeHum);
       smska += "\n";
       smska += "Pr ";
       smska += String(bmePres);
@@ -562,6 +562,7 @@ void loop()
   Disp();
   Menu();
   Timer();
+  
   if (SIM800.available())
   {
     _response = waitResponse();

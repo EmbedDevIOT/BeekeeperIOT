@@ -7,6 +7,7 @@
 // #include "FileConfig.h"
 #include <GyverOS.h>
 #include <ArduinoJson.h>
+#include "HardwareSerial.h"
 #include "SPIFFS.h"
 #include <EEPROM.h>
 #include <microDS3231.h>
@@ -76,7 +77,7 @@ struct GlobalConfig
 {
   int sn = 0;
 
-  String phone = "+79524645894"; // номер телефона в международном формате
+  String phone = "+79506045565"; // номер телефона в международном формате
   String firmware = "";          // accepts from setup()
   // System_Information
   String fwdate = "24.02.2024";
