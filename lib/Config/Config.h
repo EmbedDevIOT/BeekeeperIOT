@@ -28,13 +28,13 @@
 
 #define WiFi_
 
-#define CALL_FAIL 0
+#define CALL_FAIL 255
 #define EEP_DONE 200
 
 #define E_UW 6
 #define E_Start 5
-#define E_SCal 4
-#define E_Cal 0
+#define E_StateCal 4
+#define E_Calibr 0
 
 
 #define WiFiTimeON 15

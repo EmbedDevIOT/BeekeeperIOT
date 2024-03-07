@@ -56,7 +56,7 @@ RTC_DATA_ATTR int bootCount = 0;
 //================================ OBJECTs =============================
 #define OLED_SOFT_BUFFER_64 // Буфер на стороне МК
 GyverOLED<SSD1306_128x64> disp;
-GyverOS<3> os;
+GyverOS<4> os;
 HX711 scale; //
 HardwareSerial SIM800(1);
 // Serial1 SIM800(TX_PIN, RX_PIN);
@@ -164,10 +164,15 @@ void StartingInfo()
 //=======================       SETUP     =============================
 void setup()
 {
-  Config.firmware = "0.8.6";
+  Config.firmware = "0.8.7";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
+
+  btSET.tick();
+  if (btSET.press())
+    Serial.println("Кнопка нажата при старте");
+
   Wire.begin();
 
   // OLED INIT
@@ -193,11 +198,19 @@ void setup()
   disp.update();
 
   Serial.print("Reading Calibration State to EEPROM: ");
+
   ST.Calibration = EEPROM.read(4);
   Serial.print(ST.Calibration);
   Serial.println();
 
   // if (EEPROM.read(4) != EEP_DONE)
+  btSET.tick();
+  if (btSET.press())
+  {
+    Serial.println("Calibration clear");
+    ST.Calibration = CALL_FAIL;
+  }
+
   if (ST.Calibration != EEP_DONE)
   {
     bool st = true;
@@ -311,8 +324,8 @@ void setup()
   {
     scale.set_scale(sensors.calib);
     Serial.println(F("Set_scale"));
-    scale.tare();
-    scale.power_down();
+    // scale.tare();
+    // scale.power_down();
   }
 
   RTC.begin();
@@ -339,16 +352,16 @@ void setup()
   // SIM800 INIT
   // // delay(15000);
   // delay(2000);
-  SIM800.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+  // SIM800.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
 
-  sendATCommand("AT", true);
-  sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
+  // sendATCommand("AT", true);
+  // sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
 
-  _response = sendATCommand("AT+CMGF=1;&W", true);
-  _response = sendATCommand("AT+IFC=1, 1", true);
-  _response = sendATCommand("AT+CPBS=\"SM\"", true);
-  _response = sendATCommand("AT+CLIP=1", true); // Включаем АОН
-  _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
+  // _response = sendATCommand("AT+CMGF=1;&W", true);
+  // _response = sendATCommand("AT+IFC=1, 1", true);
+  // _response = sendATCommand("AT+CPBS=\"SM\"", true);
+  // _response = sendATCommand("AT+CLIP=1", true); // Включаем АОН
+  // _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
   // delay(10);
 
   disp.clear();
@@ -356,6 +369,7 @@ void setup()
   GetBatVoltage();
   GetBMEData();
   GetDSData();
+  GetWeight();
 
   os.attach(0, task0, 5000);
   os.attach(1, task1, 500);
@@ -376,9 +390,30 @@ void setup()
 //=======================================================================
 void loop()
 {
+  // if (scale.wait_ready_timeout(10000))
+  // {
+  //   sensors.units = scale.get_units() / 1000;
+  //   sensors.kg = sensors.units + 2.31;
+  //   // scale.power_down();
+
+  //   // if (sensors.units < 0)
+  //   // {
+  //   //   sensors.units = 0.00;
+  //   // }
+  //   // sensors.kg = sensors.units / 1000;
+  // // -2.31 (пустая платформа )  sensors.units
+  //   // Serial.print("Weight: ");
+  //   // Serial.println(sensors.units + 2.31, 2);
+  // }
+  // else
+  // {
+  //   Serial.println("HX711 not found.");
+  // }
+
   os.tick();
   ButtonHandler();
   // IncommingRing();
+
   // Task500ms();
   // Task1000ms();
   // Task1MIN();
@@ -516,7 +551,7 @@ void ButtonHandler()
     Serial.println(sms);
     Serial.println("---------------------");
 
-    sendSMS(Config.phone, sms); 
+    sendSMS(Config.phone, sms);
   }
 }
 void IncommingRing()
@@ -583,23 +618,43 @@ void GetDSData()
 // Get Data from HX711
 void GetWeight()
 {
-  // static uint32_t _tmr;
+  // if (scale.wait_ready_timeout(1000))
+  // {
+    sensors.units = scale.get_units() / 1000;
+    sensors.kg = sensors.units + 2.31;
+    // scale.power_down();
+
+    // if (sensors.units < 0)
+    // {
+    //   sensors.units = 0.00;
+    // }
+    // sensors.kg = sensors.units / 1000;
+    // -2.31 (пустая платформа )  sensors.units
+    // Serial.print("Weight: ");
+    // Serial.println(sensors.units + 2.31, 2);
+  // }
+  // else
+  // {
+  //   Serial.println("HX711 not found.");
+  // }
+
+  // // static uint32_t _tmr;
   // char msg[24];
 
-  // if ((ST.Calibration == EEP_DONE) && millis() - _tmr >= 1000)
+  // // if ((ST.Calibration == EEP_DONE) && millis() - _tmr >= 1000)
+  // // {
+  // //   _tmr = millis();
+  // // scale.power_up();
+  // sensors.units = scale.get_units();
+  // // scale.power_down();
+
+  // if (sensors.units < 0)
   // {
-  //   _tmr = millis();
-  scale.power_up();
-  sensors.units = scale.get_units(10);
-  scale.power_down();
+  //   sensors.units = 0.00;
+  // }
+  // sensors.kg = sensors.units / 1000;
 
-  if (sensors.units < 0)
-  {
-    sensors.units = 0.00;
-  }
-  sensors.kg = sensors.units / 1000;
-
-  // sprintf(msg, "W: %0.1fg ", sensors.units);
+  // sprintf(msg, "W: %0.3fg ", sensors.units);
   // Serial.println(msg);
   // Serial.print(sensors.kg, 1);
   // Serial.println();
@@ -929,17 +984,18 @@ void ShowDBG()
 // Every 5 seconds  (get data from sensors)
 void task0()
 {
-  GetBatVoltage();
+  // GetBatVoltage();
   GetBMEData();
-  GetDSData();
-  if (ST.Calibration == EEP_DONE)
-    GetWeight();
+  // GetDSData();
+  // if (ST.Calibration == EEP_DONE)
+  //   GetWeight();
 }
 
 // Every 500ms (RTC) and HX711
 void task1()
 {
   Clock = RTC.getTime();
+  // GetWeight();
 }
 
 // Display Control
@@ -976,6 +1032,5 @@ void task2()
 // debug
 void task3()
 {
-  Serial.println("Task _ 3");
   ShowDBG();
 }
