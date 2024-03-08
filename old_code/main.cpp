@@ -1,5 +1,8 @@
 #include "Config.h"
 #include "FileConfig.h"
+
+#include "ssd1306_i2c.h"
+#include "images.h"
 //=======================================================================
 
 //========================== DEFINITIONS ================================
@@ -54,11 +57,11 @@ boolean isStringMessage = false;
 
 RTC_DATA_ATTR int bootCount = 0;
 //================================ OBJECTs =============================
-#define OLED_SOFT_BUFFER_64 // Буфер на стороне МК
-GyverOLED<SSD1306_128x64> disp;
+// #define OLED_SOFT_BUFFER_64 // Буфер на стороне МК
+// GyverOLED<SSD1306_128x64> disp;
 
-// SSD1306 display(0x3c, 21, 22);
-// int frameCount = 4;
+SSD1306 display(0x3c, 21, 22);
+int frameCount = 4;
 
 GyverOS<4> os;
 HX711 scale; //
@@ -101,6 +104,13 @@ void task0(void);
 void task1(void);
 void task2(void);
 void task3(void);
+
+void drawFrame1(int x, int y);
+void drawFrame2(int x, int y);
+void drawFrame3(int x, int y);
+void drawFrame4(int x, int y);
+
+void (*frameCallbacks[])(int x, int y) = {drawFrame1, drawFrame2, drawFrame3, drawFrame4};
 //=======================================================================
 
 //=======================   I2C Scanner     =============================
@@ -146,24 +156,34 @@ void I2C_Scanning(void)
 void StartingInfo()
 {
   char msg[32];
-  disp.clear(); // очистка
+  // disp.clear();     // очистка
+  // disp.setScale(2); // масштаб текста (1..4)
 
-  disp.setScale(2); // масштаб текста (1..4)
-  disp.setCursor(10, 3);
+  // disp.setCursor(10, 3);
+  // disp.print("Beekeeper");
+  // disp.setScale(1);
   sprintf(msg, "Beekeeper");
-  disp.print(msg);
+  display.setFont(ArialMT_Plain_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(0, 32, msg);
   Serial.println(msg);
 
-  disp.setScale(1);
-  disp.setCursor(20, 7);
+  // курсор на начало 3 строки
+  // disp.setCursor(20, 7);
+  // disp.printf("firmware: %s", Config.firmware);
+  // disp.update();
+
   sprintf(msg, "firmware:%s", Config.firmware);
-  disp.print(msg);
-  Serial.println(msg);
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(0, 54, msg);
 
-  disp.update();
+  Serial.printf("firmware: %s", msg);
+  Serial.println();
+  display.display();
+
   delay(1000);
-
-  disp.clear();
+  // disp.clear();
 }
 //=======================================================================
 
@@ -179,15 +199,28 @@ void setup()
   if (btSET.press())
     Serial.println("Кнопка нажата при старте");
 
+  // initialize dispaly
+  display.init();
+  display.clear();
+  display.display();
+  display.flipScreenVertically();
+  // set the drawing functions
+  display.setFrameCallbacks(frameCount, frameCallbacks);
+  // how many ticks does a slide of a frame take?
+  display.setFrameTransitionTicks(10);
+  // defines how many ticks the driver waits between frame transitions
+  display.setFrameWaitTicks(150);
+
   // OLED INIT
-  Wire.begin();
-  disp.init();
-  disp.setContrast(255);
-  disp.clear();
-  disp.update();
+  // Wire.begin();
+  // disp.init();
+  // disp.setContrast(255);
+  // disp.clear();
+  // disp.update();
 
   Serial.println(F("OLED...Done"));
   StartingInfo();
+  // delay(1500);
 
   // HX711 Init
   scale.begin(HX_DT, HX_CLK);
@@ -196,10 +229,12 @@ void setup()
   // ADRs: 0 - Calibration 4 - State_Calibration (Done or False) 5 - FirstStart State
   EEPROM.begin(10);
 
-  disp.setScale(2); // масштаб текста (1..4)
-  disp.setCursor(13, 3);
-  disp.print("Загрузка");
-  disp.update();
+  // Если Весы не откалиброваны
+
+  // disp.setScale(2); // масштаб текста (1..4)
+  // disp.setCursor(13, 3);
+  // disp.print("Загрузка");
+  // disp.update();
 
   Serial.print("Reading Calibration State to EEPROM: ");
 
@@ -215,27 +250,26 @@ void setup()
     ST.Calibration = CALL_FAIL;
   }
 
-  // Если Весы не откалиброваны
   if (ST.Calibration != EEP_DONE)
   {
     bool st = true;
     scale.set_scale();
     Serial.println("1. Tare... remove any weights from the scale...and PRESS to SET button");
 
-    disp.clear();
-    disp.setScale(2); // масштаб текста (1..4)
-    disp.setCursor(10, 2);
-    disp.print("#Калибровка#");
-    disp.update();
+    // disp.clear();
+    // disp.setScale(2); // масштаб текста (1..4)
+    // disp.setCursor(10, 2);
+    // disp.print("#Калибровка#");
+    // disp.update();
 
-    disp.clear();
-    disp.setScale(1);
-    disp.setCursor(1, 1);
-    disp.print(F(
-        "Освободите\r\n"
-        "платформу и\r\n"
-        "нажмите кнопку ОК\r\n"));
-    disp.update();
+    // disp.clear();
+    // disp.setScale(1);
+    // disp.setCursor(1, 1);
+    // disp.print(F(
+    //     "Освободите\r\n"
+    //     "платформу и\r\n"
+    //     "нажмите кнопку ОК\r\n"));
+    // disp.update();
 
     while (st)
     {
@@ -248,20 +282,20 @@ void setup()
       }
     }
 
-    disp.clear();
-    disp.setScale(2); // масштаб текста (1..4)
-    disp.setCursor(10, 2);
-    disp.print("#Калибровка#");
-    disp.update();
+    // disp.clear();
+    // disp.setScale(2); // масштаб текста (1..4)
+    // disp.setCursor(10, 2);
+    // disp.print("#Калибровка#");
+    // disp.update();
 
-    disp.clear();
-    disp.setScale(1);
-    disp.setCursor(1, 1);
-    disp.print(F(
-        "Пометите груз весом\r\n"
-        "1кг платформу и\r\n"
-        "нажмите кнопку ОК\r\n"));
-    disp.update();
+    // disp.clear();
+    // disp.setScale(1);
+    // disp.setCursor(1, 1);
+    // disp.print(F(
+    //     "Пометите груз весом\r\n"
+    //     "1кг платформу и\r\n"
+    //     "нажмите кнопку ОК\r\n"));
+    // disp.update();
 
     Serial.print("2. Place a known weight on the scale...and PRESS to SET button");
     st = true;
@@ -275,17 +309,19 @@ void setup()
         sensors.calib = sensors.calib / 1000;
       }
     }
+    // sensors.calib = scale.get_units(10);
+    // sensors.calib = sensors.calib / 1000;
     Serial.println("4.Zero factor: ");
     Serial.print(sensors.calib);
     Serial.println();
 
-    disp.clear();
-    disp.setScale(2); // масштаб текста (1..4)
-    disp.setCursor(10, 2);
-    disp.print(F(
-        "#Калибровка# \r\n"
-        " выполнена \r\n"));
-    disp.update();
+    // disp.clear();
+    // disp.setScale(2); // масштаб текста (1..4)
+    // disp.setCursor(10, 2);
+    // disp.print(F(
+    //     "#Калибровка# \r\n"
+    //     " выполнена \r\n"));
+    // disp.update();
 
     Serial.println(F("-= Calibration Done =-"));
     ST.Calibration = EEP_DONE;
@@ -331,8 +367,8 @@ void setup()
     // scale.power_down();
   }
 
-  // RTC INIT
   RTC.begin();
+  // RTC INIT
   if (RTC.lostPower())
   {                            //  при потере питания
     RTC.setTime(COMPILE_TIME); // установить время компиляции
@@ -349,6 +385,8 @@ void setup()
   delay(20);
 
   pinMode(BAT, INPUT);
+  // // pinMode(RELAY, OUTPUT);
+  // // digitalWrite(RELAY, LOW);
 
   // SIM800 INIT
   // // delay(15000);
@@ -365,7 +403,9 @@ void setup()
   // _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
   // delay(10);
 
-  disp.clear();
+  // disp.clear();
+  display.clear();
+  display.display();
 
   GetBatVoltage();
   GetBMEData();
@@ -391,6 +431,33 @@ void setup()
 //=======================================================================
 void loop()
 {
+  // if (scale.wait_ready_timeout(10000))
+  // {
+  //   sensors.units = scale.get_units() / 1000;
+  //   sensors.kg = sensors.units + 2.31;
+  //   // scale.power_down();
+
+  //   // if (sensors.units < 0)
+  //   // {
+  //   //   sensors.units = 0.00;
+  //   // }
+  //   // sensors.kg = sensors.units / 1000;
+  // // -2.31 (пустая платформа )  sensors.units
+  //   // Serial.print("Weight: ");
+  //   // Serial.println(sensors.units + 2.31, 2);
+  // }
+  // else
+  // {
+  //   Serial.println("HX711 not found.");
+  // }
+
+  // if (display.getFrameState() == display.FRAME_STATE_FIX)
+  // {
+  //   // do something which consumes a lot of time in a moment
+  //   // when there is no transition between frames going on.
+  //   // This will keep transitions smooth;
+  // }
+
   os.tick();
   ButtonHandler();
   // IncommingRing();
@@ -416,14 +483,12 @@ void ButtonHandler()
   {
     Serial.println("State: BTN_ SET_ Click");
 
-    System.DispMenu == Action ? System.DispMenu = Menu : System.DispMenu = Action;
-
     if (System.DispState == true)
     {
       if (System.DispMenu == Menu && disp_ptr == 0)
       {
-        System.DispMenu = Menu;
-        Serial.println("Menu");
+        System.DispMenu = Time;
+        Serial.println("Set Time");
       }
 
       if (System.DispMenu == Menu && disp_ptr == 1)
@@ -455,6 +520,7 @@ void ButtonHandler()
         System.DispMenu = Action;
         Serial.println("Exit");
       }
+      // System.DispMenu == Menu ? System.DispMenu = Action : System.DispMenu = Menu;
     }
     else
     {
@@ -585,7 +651,9 @@ void GetBMEData()
   sensors.bmeT = bme.readTemperature();
   sensors.bmeH = (int)bme.readHumidity() + sensors.bmeHcal;
   sensors.bmeP_hPa = bme.readPressure();
+  // sensors.bmeP_hPa = sensors.bmeP_hPa / 100.0F;
   sensors.bmeP_mmHg = (int)pressureToMmHg(sensors.bmeP_hPa);
+  // sensors.bmeA = pressureToAltitude(sensors.bmeP_hPa);
 }
 
 // Get Data from DS18B20 Sensor
@@ -645,6 +713,72 @@ void GetWeight()
   // if (sensors.units < 0)
   //   sensors.units = 0;
   // sensors.grams = (sensors.units * 0.035274);
+}
+
+void Task500ms()
+{
+  static uint32_t tmr500;
+
+  if (millis() - tmr500 >= 500)
+  {
+    tmr500 = millis();
+    Clock = RTC.getTime();
+
+    GetWeight();
+
+    if (System.RelayState)
+    {
+      digitalWrite(RELAY, ENABLE);
+    }
+    else
+      digitalWrite(RELAY, DISABLE);
+  }
+}
+
+void Task1000ms()
+{
+  char serbuf[30];
+
+  static uint32_t tmr1000;
+
+  if (millis() - tmr1000 >= 1000)
+  {
+    tmr1000 = millis();
+
+    task_counter++;
+
+    if (ST.Calibration == EEP_DONE)
+      // GetW();
+
+      ShowDBG();
+
+    if (System.DispState)
+    {
+      DisplayHandler(System.DispMenu);
+
+      if (tmrSec < 59)
+      {
+        tmrSec++;
+      }
+      else
+      {
+        tmrSec = 0;
+        tmrMin++;
+        // disp.setPower(false);
+      }
+    }
+    else
+      disp.setPower(false);
+
+    if DISP_TIME
+    {
+      // disp.setPower(false);
+      System.DispState = false;
+      Serial.println("TimeOut: Display - OFF");
+      tmrMin = 0;
+      tmrSec = 0;
+    }
+  }
 }
 
 void Task1MIN()
@@ -877,7 +1011,7 @@ void ShowDBG()
 
   Serial.println(F("!!!!!!!!!!!!!!  DEBUG INFO  !!!!!!!!!!!!!!!!!!"));
 
-  sprintf(message, "DISP:%d | ML %d | P: %d T: %02d:%02d ", System.DispState, System.DispMenu, disp_ptr, tmrMin, tmrSec);
+  sprintf(message, "DISP:%d | ML %d | T: %02d:%02d ", System.DispState, System.DispMenu, tmrMin, tmrSec);
   Serial.println(message);
 
   sprintf(message, "TimeRTC: %02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
@@ -898,17 +1032,18 @@ void ShowDBG()
 // Every 5 seconds  (get data from sensors)
 void task0()
 {
-  GetBatVoltage();
+  // GetBatVoltage();
   GetBMEData();
-  GetDSData();
-  if (ST.Calibration == EEP_DONE)
-    GetWeight();
+  // GetDSData();
+  // if (ST.Calibration == EEP_DONE)
+  //   GetWeight();
 }
 
 // Every 500ms (RTC) and HX711
 void task1()
 {
   Clock = RTC.getTime();
+  // GetWeight();
 }
 
 // Display Control
