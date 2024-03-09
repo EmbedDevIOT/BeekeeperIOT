@@ -187,7 +187,7 @@ void setup()
 
   // set Time (First Start)
   now = millis();
-  while (millis() - now < 5000)
+  while (millis() - now < 2000)
   {
     btSET.tick();
 
