@@ -8,7 +8,7 @@
 
 // #define EB_CLICK_TIME 100 // Button timeout
 #define DISP_TIME (tmrMin == 10 && tmrSec == 0)
-#define ITEMS 6 // Main Menu Items
+#define ITEMS 5 // Main Menu Items
 
 // GPIO PINs
 #define SET_PIN 18 // кнопкa Выбор
@@ -164,6 +164,13 @@ void StartingInfo()
   delay(1000);
 
   disp.clear();
+  disp.drawBitmap(9, 16, logo_32x29, 32, 29, BITMAP_NORMAL, BUF_ADD);
+  // oled.drawBitmap(90, 16, bitmap_32x32, 32, 32);  // по умолч. нормал и BUF_ADD
+  //  x, y, имя, ширина, высота, BITMAP_NORMAL(0)/BITMAP_INVERT(1), BUF_ADD/BUF_SUBTRACT/BUF_REPLACE
+  disp.update();
+  delay(2000);
+
+  disp.clear();
 }
 //=======================================================================
 
@@ -175,6 +182,14 @@ void setup()
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
 
+  // OLED INIT
+  Wire.begin();
+  disp.init();
+  disp.setContrast(255);
+  disp.clear();
+
+  Serial.println(F("OLED...Done"));
+  StartingInfo();
   // RTC INIT
   RTC.begin();
   // battery crash
@@ -198,16 +213,6 @@ void setup()
     }
   }
 
-  // OLED INIT
-  Wire.begin();
-  disp.init();
-  disp.setContrast(255);
-  disp.clear();
-  disp.update();
-
-  Serial.println(F("OLED...Done"));
-  StartingInfo();
-
   // HX711 Init
   scale.begin(HX_DT, HX_CLK);
 
@@ -226,12 +231,18 @@ void setup()
   Serial.print(ST.Calibration);
   Serial.println();
 
-  // if (EEPROM.read(4) != EEP_DONE)
-  btUP.tick();
-  if (btUP.press())
+  // Сalibration (First Start)
+  now = millis();
+  while (millis() - now < 2000)
   {
-    Serial.println("Calibration clear");
-    ST.Calibration = CALL_FAIL;
+    btSET.tick();
+
+    if (btSET.press())
+    {
+      ST.Calibration = CALL_FAIL;
+      ST.FirstStart = CALL_FAIL;
+      Serial.println("User Calibration");
+    }
   }
 
   // Если Весы не откалиброваны
@@ -248,12 +259,12 @@ void setup()
     disp.update();
 
     disp.clear();
-    disp.setScale(1);
+    disp.setScale(2);
     disp.setCursor(1, 1);
     disp.print(F(
         "Освободите\r\n"
         "платформу и\r\n"
-        "нажмите кнопку ОК\r\n"));
+        "нажмите  ОК\r\n"));
     disp.update();
 
     while (st)
@@ -450,29 +461,23 @@ void ButtonHandler()
 
       if (System.DispMenu == Menu && disp_ptr == 1)
       {
-        System.DispMenu = Date;
-        Serial.println("Date Menu:");
-      }
-
-      if (System.DispMenu == Menu && disp_ptr == 2)
-      {
         System.DispMenu = Calib;
         Serial.println("Calibration Menu:");
       }
 
-      if (System.DispMenu == Menu && disp_ptr == 3)
+      if (System.DispMenu == Menu && disp_ptr == 2)
       {
         System.DispMenu = Notifycation;
         Serial.println("Notifycation menu:");
       }
 
-      if (System.DispMenu == Menu && disp_ptr == 4)
+      if (System.DispMenu == Menu && disp_ptr == 3)
       {
         System.DispMenu = Battery;
         Serial.println("Battery:");
       }
 
-      if (System.DispMenu == Menu && disp_ptr == 5)
+      if (System.DispMenu == Menu && disp_ptr == 4)
       {
         System.DispMenu = Action;
         Serial.println("Exit");
@@ -488,7 +493,6 @@ void ButtonHandler()
     tmrMin = 0;
     tmrSec = 0;
     disp.clear();
-    // System.RelayState = !System.RelayState;
   }
 
   if (btUP.click() || btUP.hold())
@@ -622,8 +626,11 @@ void GetWeight()
 {
   // if (scale.wait_ready_timeout(1000))
   // {
-  sensors.units = scale.get_units() / 1000;
-  sensors.kg = sensors.units + 2.31;
+  sensors.units = scale.get_units();
+  sensors.kg = sensors.units / 1000;
+  sensors.kg = sensors.kg + sensors.g_contain;
+  // protect 
+  sensors.kg = constrain(sensors.kg, 0.0, 200.0);
   // scale.power_down();
 
   // if (sensors.units < 0)
@@ -638,28 +645,6 @@ void GetWeight()
   // else
   // {
   //   Serial.println("HX711 not found.");
-  // }
-
-  // // static uint32_t _tmr;
-  // char msg[24];
-
-  // // if ((ST.Calibration == EEP_DONE) && millis() - _tmr >= 1000)
-  // // {
-  // //   _tmr = millis();
-  // // scale.power_up();
-  // sensors.units = scale.get_units();
-  // // scale.power_down();
-
-  // if (sensors.units < 0)
-  // {
-  //   sensors.units = 0.00;
-  // }
-  // sensors.kg = sensors.units / 1000;
-
-  // sprintf(msg, "W: %0.3fg ", sensors.units);
-  // Serial.println(msg);
-  // Serial.print(sensors.kg, 1);
-  // Serial.println();
   // }
 
   // scale.set_scale(sensors.calib);
@@ -694,7 +679,6 @@ void DisplayHandler(uint8_t item)
     disp.print // Вывод всех пунктов
         (F(
             "  Время:\r\n"
-            "  Дата:\r\n"
             "  Калибровка:\r\n"
             "  Оповещения:\r\n"
             "  Аккумулятор:\r\n"
@@ -736,29 +720,37 @@ void DisplayHandler(uint8_t item)
     break;
 
   case SetZero:
+  {
+    char msg[50];
+
     disp.clear();
     disp.setScale(2);
-    disp.setCursor(1, 1);
+    disp.setCursor(0, 1);
     disp.print(F(
         " Установка \r\n"
         "   нуля \r\n"
         " подождите..  \r\n"));
     disp.update();
 
+    sensors.units = scale.get_units(10) / 1000;
+    sensors.g_contain = sensors.units / -1;
+
     now = millis();
     while (millis() - now < 5000)
     {
-      // тут в течение 5000 миллисекунд вертится код
-      // удобно использовать для всяких калибровок
+      // user code
     }
+    sprintf(msg, "WEIGHT: %0.1fg | W_UNIT: %0.4f  | W_EEP: %0.2f", sensors.kg, sensors.g_contain, sensors.g_eep);
+    Serial.println(msg);
+
     System.DispMenu = Action;
     disp.clear();
     break;
-
+  }
   case Time:
   {
-    uint8_t _hour = RTC.getHours();
-    uint8_t _min = RTC.getMinutes();
+    int8_t _hour = RTC.getHours();
+    int8_t _min = RTC.getMinutes();
     bool set = false;
 
     disp.clear();
@@ -766,8 +758,12 @@ void DisplayHandler(uint8_t item)
     disp.setCursor(0, 0);
     disp.print(F(" Установка \r\n"
                  "  времени \r\n"));
-    disp.setCursor(40, 5);
-    sprintf(dispbuf, "%02d:%02d", _hour, _min);
+    disp.setCursor(35, 5);
+    sprintf(dispbuf, "%02d:", _hour);
+    disp.print(dispbuf);
+
+    disp.invertText(true);
+    sprintf(dispbuf, "%02d", _min);
     disp.print(dispbuf);
     disp.update();
 
@@ -792,16 +788,19 @@ void DisplayHandler(uint8_t item)
           disp.clear();
           disp.setScale(2);
           disp.setCursor(0, 0);
+          disp.invertText(false);
           disp.print(F(" Установка \r\n"
                        "  времени \r\n"));
           _min++;
           if (_min > 59)
             _min = 0;
 
-          disp.setScale(2);
-          disp.setCursor(40, 5);
+          disp.setCursor(35, 5);
+          sprintf(dispbuf, "%02d:", _hour);
+          disp.print(dispbuf);
 
-          sprintf(dispbuf, "%02d:%02d", _hour, _min);
+          disp.invertText(true);
+          sprintf(dispbuf, "%02d", _min);
           disp.print(dispbuf);
           disp.update();
         }
@@ -810,16 +809,20 @@ void DisplayHandler(uint8_t item)
         {
           disp.clear();
           disp.setCursor(0, 0);
+          disp.setScale(2);
+          disp.invertText(false);
           disp.print(F(" Установка \r\n"
                        "  времени \r\n"));
           _min--;
           if (_min < 0)
             _min = 59;
 
-          disp.setScale(2);
-          disp.setCursor(40, 5);
+          disp.setCursor(35, 5);
+          sprintf(dispbuf, "%02d:", _hour);
+          disp.print(dispbuf);
 
-          sprintf(dispbuf, "%02d:%02d", _hour, _min);
+          disp.invertText(true);
+          sprintf(dispbuf, "%02d", _min);
           disp.print(dispbuf);
           disp.update();
         }
@@ -829,10 +832,25 @@ void DisplayHandler(uint8_t item)
           _setM = false;
           _setH = true;
           Serial.println(F("Minute set"));
+
           disp.clear();
+          disp.setScale(2);
+          disp.setCursor(0, 0);
+          disp.invertText(false);
+          disp.print(F(" Установка \r\n"
+                       "  времени \r\n"));
+          disp.setCursor(35, 5);
+          disp.invertText(true);
+          sprintf(dispbuf, "%02d", _hour);
+          disp.print(dispbuf);
+
+          disp.invertText(false);
+          sprintf(dispbuf, ":%02d", _min);
+          disp.print(dispbuf);
+          disp.update();
         }
       }
-      // Setting Hour
+      //  HOUR
       while (_setH)
       {
         btSET.tick();
@@ -843,16 +861,21 @@ void DisplayHandler(uint8_t item)
         {
           disp.clear();
           disp.setCursor(0, 0);
+          disp.setScale(2);
+          disp.invertText(false);
           disp.print(F(" Установка \r\n"
                        "  времени \r\n"));
           _hour++;
           if (_hour > 23)
             _hour = 0;
 
-          disp.setScale(2);
-          disp.setCursor(40, 5);
+          disp.invertText(true);
+          disp.setCursor(35, 5);
+          sprintf(dispbuf, "%02d", _hour);
+          disp.print(dispbuf);
 
-          sprintf(dispbuf, "%02d:%02d", _hour, _min);
+          disp.invertText(false);
+          sprintf(dispbuf, ":%02d", _min);
           disp.print(dispbuf);
           disp.update();
         }
@@ -861,16 +884,21 @@ void DisplayHandler(uint8_t item)
         {
           disp.clear();
           disp.setCursor(0, 0);
+          disp.setScale(2);
+          disp.invertText(false);
           disp.print(F(" Установка \r\n"
                        "  времени \r\n"));
           _hour--;
           if (_hour < 0)
             _hour = 23;
 
-          disp.setScale(2);
-          disp.setCursor(40, 5);
+          disp.invertText(true);
+          disp.setCursor(35, 5);
+          sprintf(dispbuf, "%02d", _hour);
+          disp.print(dispbuf);
 
-          sprintf(dispbuf, "%02d:%02d", _hour, _min);
+          disp.invertText(false);
+          sprintf(dispbuf, ":%02d", _min);
           disp.print(dispbuf);
           disp.update();
         }
@@ -883,6 +911,13 @@ void DisplayHandler(uint8_t item)
           Serial.println(F("HOUR set"));
           RTC.setTime(0, _min, _hour, Clock.date, Clock.month, Clock.year);
           System.DispMenu = Action;
+          disp.invertText(false);
+          disp.clear();
+          disp.setScale(2); // масштаб текста (1..4)
+          disp.setCursor(13, 3);
+          disp.print("Сохранено");
+          disp.update();
+          delay(500);
           disp.clear();
         }
       }
@@ -890,10 +925,8 @@ void DisplayHandler(uint8_t item)
     break;
   }
 
-  case Date:
-
-    break;
   case Calib:
+
 
     break;
 
@@ -917,19 +950,19 @@ void printPointer(uint8_t pointer)
   disp.print(">");
 }
 
-void MenuControl(void)
-{
-  disp.clear();
-  disp.home();
-  disp.print(F("Press OK to return"));
-  disp.update();
-  while (1)
-  {
-    btSET.tick();
-    if (btSET.click())
-      return; // return возвращает нас в предыдущее меню
-  }
-}
+// void MenuControl(void)
+// {
+//   disp.clear();
+//   disp.home();
+//   disp.print(F("Press OK to return"));
+//   disp.update();
+//   while (1)
+//   {
+//     btSET.tick();
+//     if (btSET.click())
+//       return; // return возвращает нас в предыдущее меню
+//   }
+// }
 
 String waitResponse()
 {
@@ -1034,7 +1067,7 @@ void print_wakeup_reason()
 
 void ShowDBG()
 {
-  char message[50];
+  char message[52];
 
   Serial.println(F("!!!!!!!!!!!!!!  DEBUG INFO  !!!!!!!!!!!!!!!!!!"));
 
@@ -1047,7 +1080,7 @@ void ShowDBG()
   Serial.println(message);
   sprintf(message, "T_BME:%0.2f *C | H_BME:%0d % | P_BHE:%d", sensors.bmeT, (int)sensors.bmeH, (int)sensors.bmeP_mmHg);
   Serial.println(message);
-  sprintf(message, "WEIGHT: %0.1fg | W_CAL: %0.2fg  | W_EEP: %f", sensors.kg, sensors.calib);
+  sprintf(message, "WEIGHT: %0.1fg | W_CAL: %0.5fg  | W_EEP: %0.2f", sensors.kg, sensors.g_contain, sensors.g_eep);
   Serial.println(message);
   sprintf(message, "BAT: %003d", sensors.voltage);
   Serial.println(message);
