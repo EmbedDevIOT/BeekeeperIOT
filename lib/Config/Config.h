@@ -76,6 +76,15 @@ enum menu
   IDLE
 };
 
+// MAPing EEPROM 
+enum eep_map
+{
+  ADR_CALIB_OK = 0,                
+  ADR_CALIB = 1,
+  ADR_F_START_OK = ADR_CALIB + 4, 
+  ADR_CONTAIN = 6
+};
+
 //=======================================================================
 
 //=========================== GLOBAL CONFIG =============================
@@ -119,8 +128,8 @@ struct SNS
   float bmeHcal  = 4.2;
   float bmeA = 0.0;     // Altitude   BME280 m
   float bmeP_hPa = 0;   // Pressure   BME280 hPa
-  int bmeP_mmHg = 0;  // Pressure   BME280 mmHg
-  float calib = 23850; // 0.77
+  int bmeP_mmHg = 0;    // Pressure   BME280 mmHg
+  float calib = 23.38;  // 0.77
   float units = 0.0;
   float kg = 0.0;
   float g_eep = 2.31;
