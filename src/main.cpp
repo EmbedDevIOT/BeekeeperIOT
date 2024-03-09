@@ -170,14 +170,33 @@ void StartingInfo()
 //=======================       SETUP     =============================
 void setup()
 {
-  Config.firmware = "0.8.8";
+  Config.firmware = "0.8.9";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
 
-  btSET.tick();
-  if (btSET.press())
-    Serial.println("Кнопка нажата при старте");
+  // RTC INIT
+  RTC.begin();
+  // battery crash
+  if (RTC.lostPower())
+  {
+    RTC.setTime(COMPILE_TIME);
+  }
+  Clock = RTC.getTime();
+  Serial.println(F("RTC...Done"));
+
+  // set Time (First Start)
+  now = millis();
+  while (millis() - now < 5000)
+  {
+    btSET.tick();
+
+    if (btSET.press())
+    {
+      RTC.setTime(COMPILE_TIME);
+      Serial.println("Установка времени компиляции");
+    }
+  }
 
   // OLED INIT
   Wire.begin();
@@ -208,8 +227,8 @@ void setup()
   Serial.println();
 
   // if (EEPROM.read(4) != EEP_DONE)
-  btSET.tick();
-  if (btSET.press())
+  btUP.tick();
+  if (btUP.press())
   {
     Serial.println("Calibration clear");
     ST.Calibration = CALL_FAIL;
@@ -331,16 +350,6 @@ void setup()
     // scale.power_down();
   }
 
-  // RTC INIT
-  RTC.begin();
-  if (RTC.lostPower())
-  {                            //  при потере питания
-    RTC.setTime(COMPILE_TIME); // установить время компиляции
-  }
-
-  Clock = RTC.getTime();
-  Serial.println(F("RTC...Done"));
-
   // BME and DS SENSOR INIT
   bme.begin(0x76);
   Serial.println(F("BME...Done"));
@@ -405,7 +414,7 @@ void loop()
 void ButtonHandler()
 {
   uint16_t value = 0;
-  static bool btnst = false;
+  static bool st = false;
 
   btSET.tick();
   btUP.tick();
@@ -416,38 +425,51 @@ void ButtonHandler()
   {
     Serial.println("State: BTN_ SET_ Click");
 
-    System.DispMenu == Action ? System.DispMenu = Menu : System.DispMenu = Action;
+    if (System.DispMenu == Action)
+    {
+      System.DispMenu = Menu;
+    }
 
     if (System.DispState == true)
     {
       if (System.DispMenu == Menu && disp_ptr == 0)
       {
-        System.DispMenu = Menu;
-        Serial.println("Menu");
+        if (!st)
+        {
+          System.DispMenu = Menu;
+          Serial.println("General Menu:");
+          st = true;
+        }
+        else
+        {
+          System.DispMenu = Time;
+          Serial.println("Time Menu:");
+          st = false;
+        }
       }
 
       if (System.DispMenu == Menu && disp_ptr == 1)
       {
         System.DispMenu = Date;
-        Serial.println("Set Date");
+        Serial.println("Date Menu:");
       }
 
       if (System.DispMenu == Menu && disp_ptr == 2)
       {
         System.DispMenu = Calib;
-        Serial.println("Set Calibration");
+        Serial.println("Calibration Menu:");
       }
 
       if (System.DispMenu == Menu && disp_ptr == 3)
       {
         System.DispMenu = Notifycation;
-        Serial.println("Set Notifycation");
+        Serial.println("Notifycation menu:");
       }
 
       if (System.DispMenu == Menu && disp_ptr == 4)
       {
         System.DispMenu = Battery;
-        Serial.println("Set Battery");
+        Serial.println("Battery:");
       }
 
       if (System.DispMenu == Menu && disp_ptr == 5)
@@ -456,7 +478,7 @@ void ButtonHandler()
         Serial.println("Exit");
       }
     }
-    else
+    else // enable display
     {
       disp.setPower(true);
       System.DispMenu = Action;
@@ -663,6 +685,8 @@ void DisplayHandler(uint8_t item)
 {
   switch (item)
   {
+    char dispbuf[30];
+
   case Menu:
     disp.clear(); // Очищаем буфер
     disp.home();  // Курсор в левый верхний угол
@@ -676,32 +700,37 @@ void DisplayHandler(uint8_t item)
             "  Аккумулятор:\r\n"
             "  Выход:\r\n"));
 
-    printPointer(disp_ptr); // Вывод указателя
+    printPointer(disp_ptr); // Show pointer
     disp.update();          // Выводим кадр на дисплей
     break;
 
   case Action:
-    char dispbuf[30];
-
-    sprintf(dispbuf, "%02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
+    sprintf(dispbuf, "%02d:%02d", Clock.hour, Clock.minute);
     disp.setScale(2);
-    disp.setCursor(20, 0);
+    disp.setCursor(0, 0);
+    disp.print(dispbuf);
+
+    disp.setCursor(85, 0);
+    if (sensors.voltage == 0)
+    {
+      sprintf(dispbuf, "---");
+    }
+    else
+      sprintf(dispbuf, "%3d", sensors.voltage);
     disp.print(dispbuf);
 
     sprintf(dispbuf, "%0.1f", sensors.kg);
     disp.setScale(3);
-    disp.setCursor(37, 2);
+    disp.setCursor(40, 2);
     disp.print(dispbuf);
-    // disp.update();
 
-    sprintf(dispbuf, "T1:%0.1fC    T2:%0.1fC", sensors.dsT, sensors.bmeT);
+    sprintf(dispbuf, "T1:%0.1fC     T2:%0.1fC", sensors.dsT, sensors.bmeT);
     disp.setScale(1);
-    disp.setCursor(5, 6);
+    disp.setCursor(0, 6);
     disp.print(dispbuf);
-    // disp.update();
 
-    sprintf(dispbuf, "H:%02d   U:%003d   P:%003d", sensors.bmeH, sensors.voltage, sensors.bmeP_mmHg);
-    disp.setCursor(5, 7);
+    sprintf(dispbuf, "H:%02d            P:%003d", sensors.bmeH, sensors.bmeP_mmHg);
+    disp.setCursor(0, 7);
     disp.print(dispbuf);
     disp.update();
     break;
@@ -727,8 +756,140 @@ void DisplayHandler(uint8_t item)
     break;
 
   case Time:
+  {
+    uint8_t _hour = RTC.getHours();
+    uint8_t _min = RTC.getMinutes();
+    bool set = false;
 
+    disp.clear();
+    disp.setScale(2);
+    disp.setCursor(0, 0);
+    disp.print(F(" Установка \r\n"
+                 "  времени \r\n"));
+    disp.setCursor(40, 5);
+    sprintf(dispbuf, "%02d:%02d", _hour, _min);
+    disp.print(dispbuf);
+    disp.update();
+
+    while (!set)
+    {
+      bool _setH = false;
+      bool _setM = true;
+
+      btSET.tick();
+      btUP.tick();
+      btDWN.tick();
+
+      // Setting Minute
+      while (_setM)
+      {
+        btSET.tick();
+        btUP.tick();
+        btDWN.tick();
+
+        if (btUP.click())
+        {
+          disp.clear();
+          disp.setScale(2);
+          disp.setCursor(0, 0);
+          disp.print(F(" Установка \r\n"
+                       "  времени \r\n"));
+          _min++;
+          if (_min > 59)
+            _min = 0;
+
+          disp.setScale(2);
+          disp.setCursor(40, 5);
+
+          sprintf(dispbuf, "%02d:%02d", _hour, _min);
+          disp.print(dispbuf);
+          disp.update();
+        }
+
+        if (btDWN.click())
+        {
+          disp.clear();
+          disp.setCursor(0, 0);
+          disp.print(F(" Установка \r\n"
+                       "  времени \r\n"));
+          _min--;
+          if (_min < 0)
+            _min = 59;
+
+          disp.setScale(2);
+          disp.setCursor(40, 5);
+
+          sprintf(dispbuf, "%02d:%02d", _hour, _min);
+          disp.print(dispbuf);
+          disp.update();
+        }
+        // Exit Set MIN and select Hour set
+        if (btSET.click())
+        {
+          _setM = false;
+          _setH = true;
+          Serial.println(F("Minute set"));
+          disp.clear();
+        }
+      }
+      // Setting Hour
+      while (_setH)
+      {
+        btSET.tick();
+        btUP.tick();
+        btDWN.tick();
+
+        if (btUP.click())
+        {
+          disp.clear();
+          disp.setCursor(0, 0);
+          disp.print(F(" Установка \r\n"
+                       "  времени \r\n"));
+          _hour++;
+          if (_hour > 23)
+            _hour = 0;
+
+          disp.setScale(2);
+          disp.setCursor(40, 5);
+
+          sprintf(dispbuf, "%02d:%02d", _hour, _min);
+          disp.print(dispbuf);
+          disp.update();
+        }
+
+        if (btDWN.click())
+        {
+          disp.clear();
+          disp.setCursor(0, 0);
+          disp.print(F(" Установка \r\n"
+                       "  времени \r\n"));
+          _hour--;
+          if (_hour < 0)
+            _hour = 23;
+
+          disp.setScale(2);
+          disp.setCursor(40, 5);
+
+          sprintf(dispbuf, "%02d:%02d", _hour, _min);
+          disp.print(dispbuf);
+          disp.update();
+        }
+        // Exit Set HOUR and SAVE settings
+        if (btSET.click())
+        {
+          _setM = false; // flag set Min (need to exit)
+          _setH = false; // flag set Hour(need to exit)
+          set = true;    // flag set Time (need to exit)
+          Serial.println(F("HOUR set"));
+          RTC.setTime(0, _min, _hour, Clock.date, Clock.month, Clock.year);
+          System.DispMenu = Action;
+          disp.clear();
+        }
+      }
+    }
     break;
+  }
+
   case Date:
 
     break;
@@ -942,8 +1103,9 @@ void task2()
   }
 }
 
-// debug
+// Task every 1000ms
 void task3()
 {
+  GetBatVoltage();
   ShowDBG();
 }
