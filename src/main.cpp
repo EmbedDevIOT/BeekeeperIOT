@@ -46,7 +46,7 @@ uint32_t now;
 uint16_t tmrSec = 0;
 uint16_t tmrMin = 0;
 uint8_t disp_ptr = 0;
-uint8_t address[8]; // Создаем массив для адреса
+bool st = false; // menu state ()selection
 
 String currStr = "";
 boolean isStringMessage = false;
@@ -375,7 +375,7 @@ void setup()
 {
   // Set U
   Config.phone = "+79506045565";
-  Config.firmware = "0.9.0";
+  Config.firmware = "0.9.1";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -450,6 +450,7 @@ void setup()
   os.attach(1, task1, 500);
   os.attach(2, task2, 1000);
   os.attach(3, task3, 1000);
+  // os.detach(3);
   // for(;;)
   // {
   //   if (SIM800.available()) {
@@ -487,7 +488,6 @@ void BeekeeperConroller()
 void ButtonHandler()
 {
   uint16_t value = 0;
-  static bool st = false;
 
   btSET.tick();
   btUP.tick();
@@ -541,8 +541,14 @@ void ButtonHandler()
 
       if (System.DispMenu == Menu && disp_ptr == 4)
       {
-        System.DispMenu = Action;
         Serial.println("Exit");
+
+        System.DispMenu = Action;
+        disp_ptr = 0;
+        st = false;
+
+        os.start(0);
+        os.exec(0);
       }
     }
     else // enable display
@@ -555,6 +561,8 @@ void ButtonHandler()
     tmrMin = 0;
     tmrSec = 0;
     disp.clear();
+
+    os.exec(2);
   }
 
   if (btUP.click() || btUP.hold())
@@ -589,40 +597,40 @@ void ButtonHandler()
     Serial.println();
   }
 
-  if (btSET.hasClicks(2))
-  {
-    Serial.println("Has double cliks");
-    Serial.println("---------------------");
+  // if (btSET.hasClicks(2))
+  // {
+  //   Serial.println("Has double cliks");
+  //   Serial.println("---------------------");
 
-    String sms = "Bec: ";
+  //   String sms = "Bec: ";
 
-    sms += String(sensors.kg, 1);
-    sms += " Kg";
-    sms += "\n";
-    sms += "B: ";
-    sms += sensors.voltage;
-    sms += " %";
-    sms += "\n";
-    sms += "T1: ";
-    sms += String(sensors.dsT, 1);
-    sms += " *C";
-    sms += "\n";
-    sms += "T2: ";
-    sms += String(sensors.bmeT, 1);
-    sms += " *C";
-    sms += "\n";
-    sms += "H: ";
-    sms += sensors.bmeH;
-    sms += " %";
-    sms += "\n";
-    sms += "Pr: ";
-    sms += sensors.bmeP_mmHg;
+  //   sms += String(sensors.kg, 1);
+  //   sms += " Kg";
+  //   sms += "\n";
+  //   sms += "B: ";
+  //   sms += sensors.voltage;
+  //   sms += " %";
+  //   sms += "\n";
+  //   sms += "T1: ";
+  //   sms += String(sensors.dsT, 1);
+  //   sms += " *C";
+  //   sms += "\n";
+  //   sms += "T2: ";
+  //   sms += String(sensors.bmeT, 1);
+  //   sms += " *C";
+  //   sms += "\n";
+  //   sms += "H: ";
+  //   sms += sensors.bmeH;
+  //   sms += " %";
+  //   sms += "\n";
+  //   sms += "Pr: ";
+  //   sms += sensors.bmeP_mmHg;
 
-    Serial.println(sms);
-    Serial.println("---------------------");
+  //   Serial.println(sms);
+  //   Serial.println("---------------------");
 
-    sendSMS(Config.phone, sms);
-  }
+  //   sendSMS(Config.phone, sms);
+  // }
 }
 /*******************************************************************************************************/
 
@@ -697,7 +705,7 @@ void GetDSData()
 void GetWeight()
 {
   scale.power_up();
-  sensors.units = scale.get_units(10);
+  sensors.units = scale.get_units(1);
   sensors.kg = sensors.units / 1000;
   sensors.kg = sensors.kg + sensors.g_contain;
   // protect
@@ -747,7 +755,8 @@ void DisplayHandler(uint8_t item)
   }
   case Action:
   {
-    os.start(0);
+    // os.restart(0);
+
     sprintf(dispbuf, "%02d:%02d", Clock.hour, Clock.minute);
     disp.setScale(2);
     disp.setCursor(0, 0);
@@ -975,16 +984,22 @@ void DisplayHandler(uint8_t item)
           set = true;    // flag set Time (need to exit)
           Serial.println(F("HOUR set"));
           RTC.setTime(0, _min, _hour, Clock.date, Clock.month, Clock.year);
+
+          st = false;
           System.DispMenu = Action;
-          disp.invertText(false);
+          disp_ptr = 0;
 
           disp.clear();
+          disp.invertText(false);
           disp.setScale(2);
           disp.setCursor(13, 3);
           disp.print("Сохранено");
           disp.update();
           delay(500);
           disp.clear();
+          // Starting sensors request
+          os.start(0);
+          os.exec(0);
         }
       }
     }
@@ -1042,6 +1057,7 @@ void DisplayHandler(uint8_t item)
 
         System.DispMenu = Action;
         disp_ptr = 0;
+        st = false;
 
         disp.clear();
         disp.setScale(2); // масштаб текста (1..4)
@@ -1050,6 +1066,9 @@ void DisplayHandler(uint8_t item)
         disp.update();
         delay(500);
         disp.clear();
+        // Starting sensors request
+        os.start(0);
+        os.exec(0);
         return;
       }
     }
@@ -1194,6 +1213,7 @@ void DisplayHandler(uint8_t item)
 
         System.DispMenu = Action;
         disp_ptr = 0;
+        st = false;
 
         disp.invertText(false);
 
@@ -1206,6 +1226,9 @@ void DisplayHandler(uint8_t item)
         disp.update();
         delay(500);
         disp.clear();
+        // Starting sensors request
+        os.start(0);
+        os.exec(0);
       }
     }
     break;
@@ -1343,6 +1366,8 @@ void print_wakeup_reason()
 // Every 5 seconds  (get data from sensors)
 void task0()
 {
+  Serial.println("Task 5 sec");
+
   GetBatVoltage();
   GetBMEData();
   GetDSData();
