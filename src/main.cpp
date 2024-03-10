@@ -323,9 +323,18 @@ void EEPROM_Init()
   }
   // Reading Time SMS Notifications
   EEPROM.get(19, Config.UserSendTime1);
+  if (Config.UserSendTime1 == -1)
+  {
+    Config.UserSendTime1 = 9;
+  }
   Serial.printf("EEPROM: SMS_1: %02d", Config.UserSendTime1);
   Serial.println();
+
   EEPROM.get(17, Config.UserSendTime2);
+  if (Config.UserSendTime2 == -1)
+  {
+    Config.UserSendTime2 = 20;
+  }
   Serial.printf("EEPROM: SMS_2: %02d", Config.UserSendTime2);
   Serial.println();
   Serial.println(F("EEPROM_INIT_Done.."));
@@ -364,6 +373,7 @@ void StartingInfo()
 //=======================       SETUP     =============================
 void setup()
 {
+  // Set U
   Config.phone = "+79506045565";
   Config.firmware = "0.9.0";
 
@@ -1051,13 +1061,12 @@ void DisplayHandler(uint8_t item)
     disp.clear();
     disp.invertText(false);
     disp.setScale(2);
-    disp.setCursor(0, 0);
-    disp.print("Время отправки");
-    disp.setCursor(25, 2);
-    disp.print("СМС");
-    disp.setCursor(17, 5);
-    disp.printf("SMS1:%d  ", Config.UserSendTime1);
+    disp.setCursor(13, 0);
+    disp.print("Время СМС");
+    disp.setCursor(25, 3);
+    disp.printf("SMS1:%d", Config.UserSendTime1);
     disp.invertText(true);
+    disp.setCursor(25, 5);
     disp.printf("SMS2:%d", Config.UserSendTime2);
     disp.update();
 
@@ -1077,13 +1086,12 @@ void DisplayHandler(uint8_t item)
         disp.clear();
         disp.invertText(false);
         disp.setScale(2);
-        disp.setCursor(0, 0);
-        disp.print("Время отправки");
-        disp.setCursor(25, 2);
-        disp.print("СМС");
-        disp.setCursor(17, 5);
-        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.setCursor(13, 0);
+        disp.print("Время СМС");
+        disp.setCursor(25, 3);
+        disp.printf("SMS1:%d", Config.UserSendTime1);
         disp.invertText(true);
+        disp.setCursor(25, 5);
         disp.printf("SMS2:%d", Config.UserSendTime2);
         disp.update();
       }
@@ -1095,13 +1103,12 @@ void DisplayHandler(uint8_t item)
         disp.clear();
         disp.invertText(false);
         disp.setScale(2);
-        disp.setCursor(0, 0);
-        disp.print("Время отправки");
-        disp.setCursor(25, 2);
-        disp.print("СМС");
-        disp.setCursor(17, 5);
-        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.setCursor(13, 0);
+        disp.print("Время СМС");
+        disp.setCursor(25, 3);
+        disp.printf("SMS1:%d", Config.UserSendTime1);
         disp.invertText(true);
+        disp.setCursor(25, 5);
         disp.printf("SMS2:%d", Config.UserSendTime2);
         disp.update();
       }
@@ -1117,13 +1124,12 @@ void DisplayHandler(uint8_t item)
         disp.clear();
         disp.invertText(false);
         disp.setScale(2);
-        disp.setCursor(0, 0);
-        disp.print("Время отправки");
-        disp.setCursor(25, 2);
-        disp.print("СМС");
-        disp.setCursor(17, 5);
+        disp.setCursor(13, 0);
+        disp.print("Время СМС");
+        disp.setCursor(25, 3);
         disp.invertText(true);
-        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.printf("SMS1:%d", Config.UserSendTime1);
+        disp.setCursor(25, 5);
         disp.invertText(false);
         disp.printf("SMS2:%d", Config.UserSendTime2);
         disp.update();
@@ -1146,13 +1152,12 @@ void DisplayHandler(uint8_t item)
         disp.clear();
         disp.invertText(false);
         disp.setScale(2);
-        disp.setCursor(0, 0);
-        disp.print("Время отправки");
-        disp.setCursor(25, 2);
-        disp.print("СМС");
-        disp.setCursor(17, 5);
+        disp.setCursor(13, 0);
+        disp.print("Время СМС");
+        disp.setCursor(25, 3);
         disp.invertText(true);
-        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.printf("SMS1:%d", Config.UserSendTime1);
+        disp.setCursor(25, 5);
         disp.invertText(false);
         disp.printf("SMS2:%d", Config.UserSendTime2);
         disp.update();
@@ -1165,13 +1170,12 @@ void DisplayHandler(uint8_t item)
         disp.clear();
         disp.invertText(false);
         disp.setScale(2);
-        disp.setCursor(0, 0);
-        disp.print("Время отправки");
-        disp.setCursor(25, 2);
-        disp.print("СМС");
-        disp.setCursor(17, 5);
+        disp.setCursor(13, 0);
+        disp.print("Время СМС");
+        disp.setCursor(25, 3);
         disp.invertText(true);
-        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.printf("SMS1:%d", Config.UserSendTime1);
+        disp.setCursor(25, 5);
         disp.invertText(false);
         disp.printf("SMS2:%d", Config.UserSendTime2);
         disp.update();
