@@ -1,5 +1,4 @@
 #include "Config.h"
-#include "FileConfig.h"
 //=======================================================================
 
 //========================== DEFINITIONS ================================
@@ -141,6 +140,13 @@ void I2C_Scanning(void)
     Serial.println("done\n");
 }
 //=======================================================================
+/*
+Reading Calibration data from EEPROM. Calibration metodic
+* Calibration State
+* Calibration factor HX711
+* First Start Flag
+* Container weight.
+*/
 void EEPROM_Init()
 {
   // ADRs: 0 - Calibration 4 - State_Calibration (Done or False) 5 - FirstStart State
@@ -179,12 +185,6 @@ void EEPROM_Init()
     bool st = true;
     scale.set_scale();
     Serial.println("1. Tare... remove any weights from the scale...and PRESS to SET button");
-
-    disp.clear();
-    disp.setScale(2); // масштаб текста (1..4)
-    disp.setCursor(10, 2);
-    disp.print("#Калибровка#");
-    disp.update();
 
     disp.clear();
     disp.setScale(2);
@@ -233,7 +233,7 @@ void EEPROM_Init()
     Serial.println();
 
     disp.clear();
-    disp.setScale(2); // масштаб текста (1..4)
+    disp.setScale(2);
     disp.setCursor(10, 2);
     disp.print(F(
         "Калибровка \r\n"
@@ -266,25 +266,52 @@ void EEPROM_Init()
   if (ST.FirstStart != EEP_DONE && ST.Calibration == EEP_DONE)
   {
     Serial.println(F("First Starting..Zeroing"));
-    // scale.set_scale(sensors.calib);
-    // scale.tare();
+    scale.set_scale(sensors.calib);
 
-    sensors.units = scale.get_units(10) / 1000;
-    sensors.g_contain = sensors.units / -1;
+    disp.clear();
+    disp.setScale(2);
+    disp.setCursor(1, 1);
+    disp.print(F(
+        "Освободите\r\n"
+        "платформу\r\n"
+        "  > ОК <\r\n"));
+    disp.update();
 
-    Serial.printf("Units: %f", sensors.units);
-    Serial.println();
-    Serial.printf("Container: %f", sensors.g_contain);
-    Serial.println();
+    while (1)
+    {
+      btSET.tick();
 
-    delay(5000);
+      if (btSET.click())
+      {
+        // st = false;
+        sensors.units = scale.get_units(10) / 1000;
+        sensors.g_contain = sensors.units / -1;
 
-    ST.FirstStart = EEP_DONE;
-    EEPROM.put(7, ST.FirstStart);
-    EEPROM.put(12, sensors.g_contain);
-    EEPROM.commit();
+        Serial.printf("Units: %f", sensors.units);
+        Serial.println();
+        Serial.printf("Container: %f", sensors.g_contain);
+        Serial.println();
 
-    Serial.println(F("-=First Start Done=-"));
+        Serial.println("Set zero DONE...");
+
+        disp.clear();
+        disp.setScale(2); // масштаб текста (1..4)
+        disp.setCursor(13, 3);
+        disp.print("Сохранено");
+        disp.update();
+        delay(500);
+        disp.clear();
+
+        ST.FirstStart = EEP_DONE;
+        EEPROM.put(7, ST.FirstStart);
+
+        EEPROM.put(12, sensors.g_contain);
+        EEPROM.commit();
+
+        Serial.println(F("-=First Start Done=-"));
+        return;
+      }
+    }
   }
   else
   {
@@ -292,12 +319,16 @@ void EEPROM_Init()
 
     Serial.printf("EEPROM: Container: %f", sensors.g_contain);
     Serial.println();
-
-    // scale.set_scale(sensors.calib);
     Serial.println(F("Done.."));
-    // scale.tare();
-    // scale.power_down();
   }
+  // Reading Time SMS Notifications
+  EEPROM.get(19, Config.UserSendTime1);
+  Serial.printf("EEPROM: SMS_1: %02d", Config.UserSendTime1);
+  Serial.println();
+  EEPROM.get(17, Config.UserSendTime2);
+  Serial.printf("EEPROM: SMS_2: %02d", Config.UserSendTime2);
+  Serial.println();
+  Serial.println(F("EEPROM_INIT_Done.."));
 }
 //=======================================================================
 void StartingInfo()
@@ -333,7 +364,8 @@ void StartingInfo()
 //=======================       SETUP     =============================
 void setup()
 {
-  Config.firmware = "0.8.9";
+  Config.phone = "+79506045565";
+  Config.firmware = "0.9.0";
 
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -343,12 +375,12 @@ void setup()
   disp.init();
   disp.setContrast(255);
   disp.clear();
-
   Serial.println(F("OLED...Done"));
+  // Show starting info (Firmware)
   StartingInfo();
   // RTC INIT
   RTC.begin();
-  // battery crash
+  // RTC battery crash
   if (RTC.lostPower())
   {
     RTC.setTime(COMPILE_TIME);
@@ -371,17 +403,15 @@ void setup()
 
   // HX711 Init
   scale.begin(HX_DT, HX_CLK);
-
   // EEPROM Init
   EEPROM_Init();
-
   // BME and DS SENSOR INIT
   bme.begin(0x76);
   Serial.println(F("BME...Done"));
   ds18b20.begin();
   Serial.println(F("DS18b20...Done"));
   delay(20);
-
+  // Battery pin init
   pinMode(BAT, INPUT);
 
   // SIM800 INIT
@@ -682,11 +712,14 @@ void Task1MIN()
 /******************************************* MAIN_MENU *************************************************/
 void DisplayHandler(uint8_t item)
 {
+
   switch (item)
   {
     char dispbuf[30];
 
   case Menu:
+  {
+    os.stop(0);
     disp.clear(); // Очищаем буфер
     disp.home();  // Курсор в левый верхний угол
     disp.setScale(1);
@@ -701,8 +734,10 @@ void DisplayHandler(uint8_t item)
     printPointer(disp_ptr); // Show pointer
     disp.update();          // Выводим кадр на дисплей
     break;
-
+  }
   case Action:
+  {
+    os.start(0);
     sprintf(dispbuf, "%02d:%02d", Clock.hour, Clock.minute);
     disp.setScale(2);
     disp.setCursor(0, 0);
@@ -732,7 +767,7 @@ void DisplayHandler(uint8_t item)
     disp.print(dispbuf);
     disp.update();
     break;
-
+  }
   case SetZero:
   {
     char msg[50];
@@ -747,6 +782,7 @@ void DisplayHandler(uint8_t item)
     disp.update();
 
     scale.power_up();
+    delay(500);
     sensors.units = scale.get_units(10) / 1000;
     sensors.g_contain = sensors.units / -1;
     scale.power_down();
@@ -756,6 +792,9 @@ void DisplayHandler(uint8_t item)
     {
       // user code
     }
+    EEPROM.put(12, sensors.g_contain);
+    EEPROM.commit();
+
     sprintf(msg, "WEIGHT: %0.1fg | W_UNIT: %0.4f  | W_EEP: %0.2f", sensors.kg, sensors.g_contain, sensors.g_eep);
     Serial.println(msg);
 
@@ -928,8 +967,9 @@ void DisplayHandler(uint8_t item)
           RTC.setTime(0, _min, _hour, Clock.date, Clock.month, Clock.year);
           System.DispMenu = Action;
           disp.invertText(false);
+
           disp.clear();
-          disp.setScale(2); // масштаб текста (1..4)
+          disp.setScale(2);
           disp.setCursor(13, 3);
           disp.print("Сохранено");
           disp.update();
@@ -940,17 +980,238 @@ void DisplayHandler(uint8_t item)
     }
     break;
   }
-
   case Calib:
+  {
+    disp.clear();
+    disp.setScale(2); // масштаб текста (1..4)
+    disp.setCursor(0, 0);
+    disp.print("Калибровка");
+    disp.setCursor(17, 5);
+    disp.printf("- %0.2f +", sensors.g_contain);
+    disp.update();
 
+    while (1)
+    {
+      btSET.tick();
+      btUP.tick();
+      btDWN.tick();
+
+      if (btUP.click())
+      {
+        sensors.g_contain += 0.01;
+
+        disp.clear();
+        disp.setScale(2); // масштаб текста (1..4)
+        disp.setCursor(0, 0);
+        disp.print("Калибровка");
+        disp.setCursor(17, 5);
+        disp.printf("- %0.2f +", sensors.g_contain);
+        disp.update();
+      }
+
+      if (btDWN.click())
+      {
+        sensors.g_contain -= 0.01;
+
+        disp.clear();
+        disp.setScale(2); // масштаб текста (1..4)
+        disp.setCursor(0, 0);
+        disp.print("Калибровка");
+        disp.setCursor(17, 5);
+        disp.printf("- %0.2f +", sensors.g_contain);
+        disp.update();
+      }
+
+      // Exit Set CAlibration and SAVE settings
+      if (btSET.click())
+      {
+        EEPROM.put(12, sensors.g_contain);
+        EEPROM.commit();
+
+        Serial.println(F("EEPROM: Calibration SAVE"));
+
+        System.DispMenu = Action;
+        disp_ptr = 0;
+
+        disp.clear();
+        disp.setScale(2); // масштаб текста (1..4)
+        disp.setCursor(13, 3);
+        disp.print("Сохранено");
+        disp.update();
+        delay(500);
+        disp.clear();
+        return;
+      }
+    }
     break;
+  }
 
   case Notifycation:
+  {
+    disp.clear();
+    disp.invertText(false);
+    disp.setScale(2);
+    disp.setCursor(0, 0);
+    disp.print("Время отправки");
+    disp.setCursor(25, 2);
+    disp.print("СМС");
+    disp.setCursor(17, 5);
+    disp.printf("SMS1:%d  ", Config.UserSendTime1);
+    disp.invertText(true);
+    disp.printf("SMS2:%d", Config.UserSendTime2);
+    disp.update();
 
+    bool _setSMS1 = false;
+    bool _setSMS2 = true;
+    // Set SMS_2
+    while (_setSMS2)
+    {
+      btSET.tick();
+      btUP.tick();
+      btDWN.tick();
+
+      if (btUP.click())
+      {
+        Config.UserSendTime2 > 23 ? Config.UserSendTime2 = 0 : Config.UserSendTime2++;
+
+        disp.clear();
+        disp.invertText(false);
+        disp.setScale(2);
+        disp.setCursor(0, 0);
+        disp.print("Время отправки");
+        disp.setCursor(25, 2);
+        disp.print("СМС");
+        disp.setCursor(17, 5);
+        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.invertText(true);
+        disp.printf("SMS2:%d", Config.UserSendTime2);
+        disp.update();
+      }
+
+      if (btDWN.click())
+      {
+        Config.UserSendTime2 < 0 ? Config.UserSendTime2 = 23 : Config.UserSendTime2--;
+
+        disp.clear();
+        disp.invertText(false);
+        disp.setScale(2);
+        disp.setCursor(0, 0);
+        disp.print("Время отправки");
+        disp.setCursor(25, 2);
+        disp.print("СМС");
+        disp.setCursor(17, 5);
+        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.invertText(true);
+        disp.printf("SMS2:%d", Config.UserSendTime2);
+        disp.update();
+      }
+
+      // Exit Set Calibration and SAVE settings
+      if (btSET.click())
+      {
+        EEPROM.put(17, Config.UserSendTime2);
+        EEPROM.commit();
+
+        Serial.println(F("EEPROM: SMS_2_MSG SAVE"));
+
+        disp.clear();
+        disp.invertText(false);
+        disp.setScale(2);
+        disp.setCursor(0, 0);
+        disp.print("Время отправки");
+        disp.setCursor(25, 2);
+        disp.print("СМС");
+        disp.setCursor(17, 5);
+        disp.invertText(true);
+        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.invertText(false);
+        disp.printf("SMS2:%d", Config.UserSendTime2);
+        disp.update();
+
+        _setSMS2 = false;
+        _setSMS1 = true;
+      }
+    }
+    // Set SMS_1
+    while (_setSMS1)
+    {
+      btSET.tick();
+      btUP.tick();
+      btDWN.tick();
+
+      if (btUP.click())
+      {
+        Config.UserSendTime1 > 23 ? Config.UserSendTime1 = 0 : Config.UserSendTime1++;
+
+        disp.clear();
+        disp.invertText(false);
+        disp.setScale(2);
+        disp.setCursor(0, 0);
+        disp.print("Время отправки");
+        disp.setCursor(25, 2);
+        disp.print("СМС");
+        disp.setCursor(17, 5);
+        disp.invertText(true);
+        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.invertText(false);
+        disp.printf("SMS2:%d", Config.UserSendTime2);
+        disp.update();
+      }
+
+      if (btDWN.click())
+      {
+        Config.UserSendTime1 < 0 ? Config.UserSendTime1 = 23 : Config.UserSendTime1--;
+
+        disp.clear();
+        disp.invertText(false);
+        disp.setScale(2);
+        disp.setCursor(0, 0);
+        disp.print("Время отправки");
+        disp.setCursor(25, 2);
+        disp.print("СМС");
+        disp.setCursor(17, 5);
+        disp.invertText(true);
+        disp.printf("SMS1:%d  ", Config.UserSendTime1);
+        disp.invertText(false);
+        disp.printf("SMS2:%d", Config.UserSendTime2);
+        disp.update();
+      }
+
+      // Exit Set Calibration and SAVE settings
+      if (btSET.click())
+      {
+        EEPROM.put(19, Config.UserSendTime1);
+        EEPROM.commit();
+
+        Serial.println(F("EEPROM: SMS_1_MSG SAVE"));
+
+        _setSMS1 = false; // flag to EXIT
+        _setSMS2 = false; // flag to EXIT
+
+        System.DispMenu = Action;
+        disp_ptr = 0;
+
+        disp.invertText(false);
+
+        disp.clear();
+
+        disp.clear();
+        disp.setScale(2);
+        disp.setCursor(13, 3);
+        disp.print("Сохранено");
+        disp.update();
+        delay(500);
+        disp.clear();
+      }
+    }
     break;
+  }
+
   case Battery:
+  {
 
     break;
+  }
   case IDLE:
 
     break;
@@ -1095,6 +1356,7 @@ void task1()
 void task2()
 {
   // task_counter++;
+  ButtonHandler();
 
   if (System.DispState)
   {
@@ -1119,6 +1381,7 @@ void task2()
     Serial.println("TimeOut: Display - OFF");
     tmrMin = 0;
     tmrSec = 0;
+    disp_ptr = 0;
   }
 }
 
@@ -1144,9 +1407,11 @@ void ShowDBG()
   Serial.println(message);
   sprintf(message, "T_BME:%0.2f *C | H_BME:%0d % | P_BHE:%d", sensors.bmeT, (int)sensors.bmeH, (int)sensors.bmeP_mmHg);
   Serial.println(message);
-  sprintf(message, "WEIGHT: %0.1fg | W_CAL: %0.5fg  | W_EEP: %0.2f", sensors.kg, sensors.g_contain, sensors.g_eep);
+  sprintf(message, "WEIGHT: %0.2fg | W_CAL: %0.5fg  | W_EEP: %0.2f", sensors.kg, sensors.g_contain, sensors.g_eep);
   Serial.println(message);
   sprintf(message, "BAT: %003d", sensors.voltage);
+  Serial.println(message);
+  sprintf(message, "EEPROM: SMS_1 %02d | SMS_2 %02d", Config.UserSendTime1, Config.UserSendTime2);
   Serial.println(message);
 
   Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
