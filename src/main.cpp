@@ -374,7 +374,8 @@ void StartingInfo()
 void setup()
 {
   // Set U
-  Config.phone = "+79506045565";
+  Config.phone = "79506045565";
+
   Config.firmware = "0.9.1";
 
   Serial.begin(UARTSpeed);
@@ -746,7 +747,8 @@ void DisplayHandler(uint8_t item)
             "  Время:\r\n"
             "  Калибровка:\r\n"
             "  Оповещения:\r\n"
-            "  Аккумулятор:\r\n"
+            // "  Аккумулятор:\r\n"
+            "  Номер СМС:\r\n"
             "  Выход:\r\n"));
 
     printPointer(disp_ptr); // Show pointer
@@ -1239,9 +1241,74 @@ void DisplayHandler(uint8_t item)
 
     break;
   }
-  case IDLE:
+  case SMS_NUM:
+  {
+    disp.clear();
+    disp.setScale(2); // масштаб текста (1..4)
+    disp.setCursor(0, 0);
+    disp.print("Номер для СМС");
+    disp.setCursor(0, 5);
+    disp.printf("- %0d +", Config.phone);
+    disp.update();
+
+    while (1)
+    {
+      btSET.tick();
+      btUP.tick();
+      btDWN.tick();
+
+      if (btUP.click())
+      {
+        sensors.g_contain += 0.01;
+
+        disp.clear();
+        disp.setScale(2); // масштаб текста (1..4)
+        disp.setCursor(0, 0);
+        disp.print("Номер для СМС");
+        disp.setCursor(0, 5);
+        disp.printf("- %0d +", Config.phone);
+        disp.update();
+      }
+
+      if (btDWN.click())
+      {
+        sensors.g_contain -= 0.01;
+
+        disp.clear();
+        disp.setScale(2); // масштаб текста (1..4)
+        disp.setCursor(0, 0);
+        disp.print("Калибровка");
+        disp.setCursor(17, 5);
+        disp.printf("- %0.2f +", sensors.g_contain);
+        disp.update();
+      }
+
+      // Exit Set CAlibration and SAVE settings
+      if (btSET.click())
+      {
+
+        Serial.println(F("EEPROM: SMS Number SAVE"));
+
+        System.DispMenu = Action;
+        disp_ptr = 0;
+        st = false;
+
+        disp.clear();
+        disp.setScale(2); // масштаб текста (1..4)
+        disp.setCursor(13, 3);
+        disp.print("Сохранено");
+        disp.update();
+        delay(500);
+        disp.clear();
+        // Starting sensors request
+        os.start(0);
+        os.exec(0);
+        return;
+      }
+    }
 
     break;
+  }
   default:
     break;
   }

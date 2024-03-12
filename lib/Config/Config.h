@@ -50,8 +50,8 @@ enum menu
   Time,
   Calib,
   Notifycation,
-  Battery,
-  IDLE
+  SMS_NUM,
+  Battery
 };
 
 // MAPing EEPROM
@@ -71,6 +71,8 @@ struct GlobalConfig
   int sn = 0;
 
   String phone = "";    // номер телефона в международном формате
+  // uint8_t phone[10] = {9,5,0,6,0,4,5,5,6,5};    // номер телефона в международном формате
+  long phone_int = 79506045565; // long = uint32_t
   String firmware = ""; // accepts from setup()
   // System_Information
   String fwdate = "24.02.2024";
@@ -84,7 +86,7 @@ struct GlobalConfig
   int8_t UserSendTime2 = 20;
 
   byte WiFiMode = 0; // Режим работы WiFi
-  long WiFiPeriod = 0;
+  // long WiFiPeriod = 0;
 };
 extern GlobalConfig Config;
 //=======================================================================
