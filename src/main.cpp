@@ -48,6 +48,8 @@ uint16_t tmrMin = 0;
 uint8_t disp_ptr = 0;
 bool st = false; // menu state ()selection
 
+char charPhoneNumber[11];
+
 String currStr = "";
 boolean isStringMessage = false;
 
@@ -373,14 +375,17 @@ void StartingInfo()
 //=======================       SETUP     =============================
 void setup()
 {
-  // Set U
-  Config.phone = "79506045565";
-
-  Config.firmware = "0.9.1";
-
+  // Set User Phone Number
+  for (int i = 0; i < 11; i++)
+  {
+    charPhoneNumber[i] = (char)(Config.phoneNumber[i] + '0');
+  }
+  Config.phone += charPhoneNumber;
+  // Firmware version
+  Config.firmware = "0.9.2";
+  // UART Init
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
-
   // OLED INIT
   Wire.begin();
   disp.init();
@@ -536,7 +541,7 @@ void ButtonHandler()
 
       if (System.DispMenu == Menu && disp_ptr == 3)
       {
-        System.DispMenu = Battery;
+        System.DispMenu = SMS_NUM;
         Serial.println("Battery:");
       }
 
@@ -1236,22 +1241,30 @@ void DisplayHandler(uint8_t item)
     break;
   }
 
-  case Battery:
-  {
-
-    break;
-  }
   case SMS_NUM:
   {
+    int currentDigit = 10;
+
     disp.clear();
     disp.setScale(2); // масштаб текста (1..4)
     disp.setCursor(0, 0);
-    disp.print("Номер для СМС");
+    disp.print("СМС Номер:");
+
     disp.setCursor(0, 5);
-    disp.printf("- %0d +", Config.phone);
+    for (int i = 0; i < 11; i++)
+    {
+      if (i == currentDigit)
+      {
+        disp.invertText(true);
+      }
+      else
+        disp.invertText(false);
+      disp.print(Config.phoneNumber[i]);
+    }
+
     disp.update();
 
-    while (1)
+    while (currentDigit != -1)
     {
       btSET.tick();
       btUP.tick();
@@ -1259,56 +1272,101 @@ void DisplayHandler(uint8_t item)
 
       if (btUP.click())
       {
-        sensors.g_contain += 0.01;
+        Config.phoneNumber[currentDigit] = (Config.phoneNumber[currentDigit] + 1) % 10;
 
         disp.clear();
         disp.setScale(2); // масштаб текста (1..4)
+        disp.invertText(false);
         disp.setCursor(0, 0);
-        disp.print("Номер для СМС");
+        disp.print("СМС Номер:");
+
         disp.setCursor(0, 5);
-        disp.printf("- %0d +", Config.phone);
+        for (int i = 0; i < 11; i++)
+        {
+          (i == currentDigit) ? disp.invertText(true) : disp.invertText(false);
+          disp.print(Config.phoneNumber[i]);
+        }
         disp.update();
       }
 
       if (btDWN.click())
       {
-        sensors.g_contain -= 0.01;
+        Config.phoneNumber[currentDigit] = (Config.phoneNumber[currentDigit] - 1 + 10) % 10;
 
         disp.clear();
         disp.setScale(2); // масштаб текста (1..4)
+        disp.invertText(false);
         disp.setCursor(0, 0);
-        disp.print("Калибровка");
-        disp.setCursor(17, 5);
-        disp.printf("- %0.2f +", sensors.g_contain);
+        disp.print("СМС Номер:");
+
+        disp.setCursor(0, 5);
+        for (int i = 0; i < 11; i++)
+        {
+          (i == currentDigit) ? disp.invertText(true) : disp.invertText(false);
+          disp.print(Config.phoneNumber[i]);
+        }
         disp.update();
       }
 
       // Exit Set CAlibration and SAVE settings
       if (btSET.click())
       {
+        currentDigit--;
 
-        Serial.println(F("EEPROM: SMS Number SAVE"));
-
-        System.DispMenu = Action;
-        disp_ptr = 0;
-        st = false;
+        Serial.printf("Current Digit: %d", currentDigit);
+        Serial.println();
 
         disp.clear();
         disp.setScale(2); // масштаб текста (1..4)
-        disp.setCursor(13, 3);
-        disp.print("Сохранено");
+        disp.invertText(false);
+        disp.setCursor(0, 0);
+        disp.print("СМС Номер:");
+
+        disp.setCursor(0, 5);
+        for (int i = 0; i < 11; i++)
+        {
+          (i == currentDigit) ? disp.invertText(true) : disp.invertText(false);
+          disp.print(Config.phoneNumber[i]);
+        }
         disp.update();
-        delay(500);
-        disp.clear();
-        // Starting sensors request
-        os.start(0);
-        os.exec(0);
-        return;
       }
     }
+    #error
+    for (int i = 0; i < 11; i++)
+    {
+      charPhoneNumber[i] = (char)(Config.phoneNumber[i] + '0');
+    }
+    Config.phone = charPhoneNumber;
+
+    Serial.printf("EEPROM: SMS Number: %s", Config.phone);
+    Serial.println();
+
+    disp.invertText(false);
+
+    System.DispMenu = Action;
+    disp_ptr = 0;
+    st = false;
+
+    disp.clear();
+    disp.setScale(2); // масштаб текста (1..4)
+    disp.setCursor(13, 3);
+    disp.print("Сохранено");
+    disp.update();
+    delay(500);
+    disp.clear();
+    // Starting sensors request
+    os.start(0);
+    os.exec(0);
 
     break;
   }
+
+  case Battery:
+  {
+
+    break;
+  }
+
   default:
     break;
   }

@@ -68,11 +68,11 @@ enum eep_map
 //=========================== GLOBAL CONFIG =============================
 struct GlobalConfig
 {
-  int sn = 0;
+  uint16_t sn = 0;
 
-  String phone = "";    // номер телефона в международном формате
-  // uint8_t phone[10] = {9,5,0,6,0,4,5,5,6,5};    // номер телефона в международном формате
-  long phone_int = 79506045565; // long = uint32_t
+  String phone = "+";    // номер телефона в международном формате
+  uint8_t phoneNumber[11] = {7,9,5,0,6,0,4,5,5,6,5};    // номер телефона в международном формате
+
   String firmware = ""; // accepts from setup()
   // System_Information
   String fwdate = "24.02.2024";
