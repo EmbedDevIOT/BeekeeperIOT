@@ -41,6 +41,7 @@ String _response = "";
 uint8_t task_counter = 0, task_cnt_10S = 0;
 float Calibration_Factor_Of_Load_cell = 23850; //-31;
 
+uint32_t tmr = 0;
 uint32_t now;
 
 uint16_t tmrSec = 0;
@@ -75,6 +76,9 @@ VirtButton btVirt;
 // Dallas Themperature sensor DS18b20
 OneWire oneWire(DS_SNS);
 DallasTemperature ds18b20(&oneWire);
+// Freertos Create Task object
+TaskHandle_t TaskCore0;
+TaskHandle_t TaskCore1;
 //=======================================================================
 
 //================================ PROTOTIPs =============================
@@ -98,10 +102,14 @@ void GetDSData(void);
 void GetBMEData(void);
 void GetWeight(void);
 void ShowDBG(void);
+
 void task0(void);
 void task1(void);
 void task2(void);
 void task3(void);
+
+void Task1Code(void *pvParameters);
+void Task2Code(void *pvParameters);
 //=======================================================================
 
 //=======================   I2C Scanner     =============================
@@ -382,7 +390,7 @@ void setup()
   }
   Config.phone += charPhoneNumber;
   // Firmware version
-  Config.firmware = "0.9.2";
+  Config.firmware = "0.9.3";
   // UART Init
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -453,11 +461,13 @@ void setup()
   GetWeight();
 
   os.attach(0, task0, 5000);
+  os.detach(0);
+
   os.attach(1, task1, 500);
-  os.attach(2, task2, 1000);
+  os.attach(2, task2, 500);
   os.attach(3, task3, 1000);
-  // os.detach(3);
-  // for(;;)
+
+    // for(;;)
   // {
   //   if (SIM800.available()) {
   //   // Если есть данные для чтения из RS485
@@ -466,21 +476,66 @@ void setup()
   //   Serial.println(data);
   //   }
   // }
+
+  // FreeRTOS
+  // Create Task. Running to core 0
+  xTaskCreatePinnedToCore(
+      Task1Code,   // Функция для задачи
+      "TaskCore0", // Имя задачи
+      10000,       // Размер стека
+      NULL,        // Параметр задачи
+      1,           // Приоритет
+      &TaskCore0,  // Выполняемая операция
+      0            // Номер ядра
+  );
+  delay(500);
+
+  // Create Task. Running to core 1
+  xTaskCreatePinnedToCore(
+      Task2Code,
+      "TaskCore1",
+      10000,
+      NULL,
+      1,
+      &TaskCore1,
+      1
+   );
+  delay(500);
 }
 //=======================================================================
+void Task1Code(void *pvParameters)
+{
+  Serial.print("Task1 running on core ");
+  Serial.println(xPortGetCoreID());
 
+  for (;;)
+  {
+    if (millis() - tmr >= 500)
+    {
+      task0();
+      tmr += 500;
+    }
+  }
+}
+
+void Task2Code(void *pvParameters)
+{
+  Serial.print("Task2 running on core ");
+  Serial.println(xPortGetCoreID());
+  for (;;)
+  {
+    os.tick();
+    ButtonHandler();
+  }
+}
 //=========================      M A I N       ===========================
 void loop()
 {
-  os.tick();
-  ButtonHandler();
+  // os.tick();
+  // ButtonHandler();
+
   // IncommingRing();
   // BeekeeperConroller();
-
-  // Task500ms();
-  // Task1000ms();
-  // Task1MIN();
-  //
 }
 //=======================================================================
 
@@ -1331,7 +1386,8 @@ void DisplayHandler(uint8_t item)
         disp.update();
       }
     }
-    #error
+
+    // #error // Продолжить и дописать ффункцию сохранения номера в EEPROM
     for (int i = 0; i < 11; i++)
     {
       charPhoneNumber[i] = (char)(Config.phoneNumber[i] + '0');
