@@ -295,8 +295,6 @@ void EEPROM_Init()
     Serial.println();
     scale.set_scale(sensors.calib);
   }
-
-  // delay(3000);
   delay(500);
 
   EEPROM.get(7, ST.FirstStart);
@@ -566,8 +564,6 @@ void ButtonHandler()
 
   if (btSET.click())
   {
-    Serial.println("State: BTN_ SET_ Click");
-
     if (System.DispMenu == Action)
     {
       System.DispMenu = Menu;
@@ -606,7 +602,7 @@ void ButtonHandler()
       if (System.DispMenu == Menu && disp_ptr == 3)
       {
         System.DispMenu = SMS_NUM;
-        Serial.println("Battery:");
+        Serial.println("SMS Number:");
       }
 
       if (System.DispMenu == Menu && disp_ptr == 4)
@@ -632,7 +628,6 @@ void ButtonHandler()
 
   if (btUP.click() || btUP.hold())
   {
-    Serial.println("BTN_UP");
     tmrMin = 0;
     tmrSec = 0;
     if (System.DispMenu == Menu)
@@ -674,13 +669,12 @@ void ButtonHandler()
     sprintf(msg, "WEIGHT: %0.1fg | W_UNIT: %0.4f  | W_EEP: %0.2f", sensors.kg, sensors.g_contain, sensors.g_eep);
     Serial.println(msg);
 
-    ST.HX711_Block = false; // disable block task0;
+    ST.HX711_Block = false; // block task0;
     disp.clear();
   }
 
   if (btDWN.click() || btDWN.hold())
   {
-    Serial.println("State: BTN_DWN_ Click");
     tmrMin = 0;
     tmrSec = 0;
 
@@ -814,11 +808,10 @@ void DisplayHandler(uint8_t item)
     char dispbuf[30];
   case Menu:
   {
-    // os.stop(0);
-    disp.clear(); // Очищаем буфер
-    disp.home();  // Курсор в левый верхний угол
+    disp.clear();
+    disp.home();  
     disp.setScale(1);
-    disp.print // Вывод всех пунктов
+    disp.print 
         (F(
             "  Время:\r\n"
             "  Калибровка:\r\n"
@@ -828,13 +821,12 @@ void DisplayHandler(uint8_t item)
             "  Выход:\r\n"));
 
     printPointer(disp_ptr); // Show pointer
-    disp.update();          // Выводим кадр на дисплей
+    disp.update();         
     break;
   }
+
   case Action:
   {
-    // os.restart(0);
-
     sprintf(dispbuf, "%02d:%02d", Clock.hour, Clock.minute);
     disp.setScale(2);
     disp.setCursor(0, 0);
@@ -1050,7 +1042,7 @@ void DisplayHandler(uint8_t item)
   case Calib:
   {
     disp.clear();
-    disp.setScale(2); // масштаб текста (1..4)
+    disp.setScale(2);
     disp.setCursor(0, 0);
     disp.print("Калибровка");
     disp.setCursor(17, 5);
@@ -1068,7 +1060,7 @@ void DisplayHandler(uint8_t item)
         sensors.g_contain += 0.01;
 
         disp.clear();
-        disp.setScale(2); // масштаб текста (1..4)
+        disp.setScale(2); 
         disp.setCursor(0, 0);
         disp.print("Калибровка");
         disp.setCursor(17, 5);
@@ -1081,7 +1073,7 @@ void DisplayHandler(uint8_t item)
         sensors.g_contain -= 0.01;
 
         disp.clear();
-        disp.setScale(2); // масштаб текста (1..4)
+        disp.setScale(2); 
         disp.setCursor(0, 0);
         disp.print("Калибровка");
         disp.setCursor(17, 5);
@@ -1102,7 +1094,7 @@ void DisplayHandler(uint8_t item)
         st = false;
 
         disp.clear();
-        disp.setScale(2); // масштаб текста (1..4)
+        disp.setScale(2); 
         disp.setCursor(13, 3);
         disp.print("Сохранено");
         disp.update();
@@ -1294,7 +1286,7 @@ void DisplayHandler(uint8_t item)
     int currentDigit = 0;
 
     disp.clear();
-    disp.setScale(2); // масштаб текста (1..4)
+    disp.setScale(2); 
     disp.setCursor(0, 0);
     disp.print("СМС Номер:");
 
@@ -1323,7 +1315,7 @@ void DisplayHandler(uint8_t item)
         Config.phoneNumber[currentDigit] = (Config.phoneNumber[currentDigit] + 1) % 10;
 
         disp.clear();
-        disp.setScale(2); // масштаб текста (1..4)
+        disp.setScale(2); 
         disp.invertText(false);
         disp.setCursor(0, 0);
         disp.print("СМС Номер:");
@@ -1342,7 +1334,7 @@ void DisplayHandler(uint8_t item)
         Config.phoneNumber[currentDigit] = (Config.phoneNumber[currentDigit] - 1 + 10) % 10;
 
         disp.clear();
-        disp.setScale(2); // масштаб текста (1..4)
+        disp.setScale(2); 
         disp.invertText(false);
         disp.setCursor(0, 0);
         disp.print("СМС Номер:");
@@ -1365,7 +1357,7 @@ void DisplayHandler(uint8_t item)
         Serial.println();
 
         disp.clear();
-        disp.setScale(2); // масштаб текста (1..4)
+        disp.setScale(2); 
         disp.invertText(false);
         disp.setCursor(0, 0);
         disp.print("СМС Номер:");
@@ -1380,7 +1372,6 @@ void DisplayHandler(uint8_t item)
       }
     }
 
-    // #error // Продолжить и дописать ффункцию сохранения номера в EEPROM
     for (int i = 0; i < 10; i++)
     {
       charPhoneNumber[i] = (char)(Config.phoneNumber[i] + '0');
@@ -1409,7 +1400,6 @@ void DisplayHandler(uint8_t item)
     disp.update();
     delay(500);
     disp.clear();
-
     break;
   }
 
@@ -1508,38 +1498,6 @@ void GetBatVoltage()
 }
 /*******************************************************************************************************/
 
-/* Method to print the reason by which ESP32
-has been awaken from sleep
-*/
-void print_wakeup_reason()
-{
-  esp_sleep_wakeup_cause_t wakeup_reason;
-
-  wakeup_reason = esp_sleep_get_wakeup_cause();
-
-  switch (wakeup_reason)
-  {
-  case ESP_SLEEP_WAKEUP_EXT0:
-    Serial.println("Wakeup caused by external signal using RTC_IO");
-    break;
-  case ESP_SLEEP_WAKEUP_EXT1:
-    Serial.println("Wakeup caused by external signal using RTC_CNTL");
-    break;
-  case ESP_SLEEP_WAKEUP_TIMER:
-    Serial.println("Wakeup caused by timer");
-    break;
-  case ESP_SLEEP_WAKEUP_TOUCHPAD:
-    Serial.println("Wakeup caused by touchpad");
-    break;
-  case ESP_SLEEP_WAKEUP_ULP:
-    Serial.println("Wakeup caused by ULP program");
-    break;
-  default:
-    Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
-    break;
-  }
-}
-
 // Every 500ms Read RTC Data and Display control (Update/ON/OFF)
 void task500ms()
 {
@@ -1576,7 +1534,9 @@ void task500ms()
 void task1000msDBG()
 {
   GetBatVoltage();
+  #ifdef DEBUG
   ShowDBG();
+  #endif
 }
 
 void ShowDBG()
@@ -1607,4 +1567,36 @@ void ShowDBG()
 
   Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
   Serial.println();
+}
+
+/* Method to print the reason by which ESP32
+has been awaken from sleep
+*/
+void print_wakeup_reason()
+{
+  esp_sleep_wakeup_cause_t wakeup_reason;
+
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch (wakeup_reason)
+  {
+  case ESP_SLEEP_WAKEUP_EXT0:
+    Serial.println("Wakeup caused by external signal using RTC_IO");
+    break;
+  case ESP_SLEEP_WAKEUP_EXT1:
+    Serial.println("Wakeup caused by external signal using RTC_CNTL");
+    break;
+  case ESP_SLEEP_WAKEUP_TIMER:
+    Serial.println("Wakeup caused by timer");
+    break;
+  case ESP_SLEEP_WAKEUP_TOUCHPAD:
+    Serial.println("Wakeup caused by touchpad");
+    break;
+  case ESP_SLEEP_WAKEUP_ULP:
+    Serial.println("Wakeup caused by ULP program");
+    break;
+  default:
+    Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
+    break;
+  }
 }

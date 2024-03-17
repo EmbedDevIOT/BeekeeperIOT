@@ -100,7 +100,6 @@ struct SYTM
 };
 extern SYTM System;
 //=======================================================================
-
 struct SNS
 {
   float dsT = 0.0;     // Temperature DS18B20
