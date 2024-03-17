@@ -438,7 +438,7 @@ void setup()
   Serial.print("Phone: ");
   Serial.println(Config.phone);
   delay(1000);
-  
+
   StartingInfo();
   // RTC INIT
   RTC.begin();
@@ -1260,7 +1260,7 @@ void DisplayHandler(uint8_t item)
 
   case SMS_NUM:
   {
-    int currentDigit = 10;
+    int currentDigit = 9;
 
     disp.clear();
     disp.setScale(2); // масштаб текста (1..4)
@@ -1268,7 +1268,7 @@ void DisplayHandler(uint8_t item)
     disp.print("СМС Номер:");
 
     disp.setCursor(0, 5);
-    for (int i = 0; i < 11; i++)
+    for (int i = 0; i < 10; i++)
     {
       if (i == currentDigit)
       {
@@ -1298,7 +1298,7 @@ void DisplayHandler(uint8_t item)
         disp.print("СМС Номер:");
 
         disp.setCursor(0, 5);
-        for (int i = 0; i < 11; i++)
+        for (int i = 0; i < 10; i++)
         {
           (i == currentDigit) ? disp.invertText(true) : disp.invertText(false);
           disp.print(Config.phoneNumber[i]);
@@ -1317,7 +1317,7 @@ void DisplayHandler(uint8_t item)
         disp.print("СМС Номер:");
 
         disp.setCursor(0, 5);
-        for (int i = 0; i < 11; i++)
+        for (int i = 0; i < 10; i++)
         {
           (i == currentDigit) ? disp.invertText(true) : disp.invertText(false);
           disp.print(Config.phoneNumber[i]);
@@ -1340,7 +1340,7 @@ void DisplayHandler(uint8_t item)
         disp.print("СМС Номер:");
 
         disp.setCursor(0, 5);
-        for (int i = 0; i < 11; i++)
+        for (int i = 0; i < 10; i++)
         {
           (i == currentDigit) ? disp.invertText(true) : disp.invertText(false);
           disp.print(Config.phoneNumber[i]);
@@ -1350,7 +1350,7 @@ void DisplayHandler(uint8_t item)
     }
 
     // #error // Продолжить и дописать ффункцию сохранения номера в EEPROM
-    for (int i = 0; i < 11; i++)
+    for (int i = 0; i < 10; i++)
     {
       charPhoneNumber[i] = (char)(Config.phoneNumber[i] + '0');
     }
@@ -1366,15 +1366,13 @@ void DisplayHandler(uint8_t item)
     st = false;
 
     disp.clear();
-    disp.setScale(2); // масштаб текста (1..4)
+    disp.setScale(2); 
     disp.setCursor(13, 3);
     disp.print("Сохранено");
     disp.update();
     delay(500);
     disp.clear();
-    // Starting sensors request
-    // os.start(0);
-    // os.exec(0);
+
 
     break;
   }
