@@ -378,6 +378,28 @@ void EEPROM_Init()
   }
   Serial.printf("EEPROM: SMS_2: %02d", Config.UserSendTime2);
   Serial.println();
+
+  EEPROM.get(21, Config.phoneNumber);
+  // protect to 255
+  for (uint8_t i = 0; i < 10; i++)
+  {
+    if (Config.phoneNumber[i] > 9)
+    {
+      Config.phoneNumber[i] = 0;
+    }
+  }
+
+  // Set User Phone Number
+  for (int i = 0; i < 10; i++)
+  {
+    charPhoneNumber[i] = (char)(Config.phoneNumber[i] + '0');
+  }
+  Config.phone += '+';
+  Config.phone += Config.iso_code;
+  Config.phone += charPhoneNumber;
+  Serial.print("EEPROM: Phone: ");
+  Serial.println(Config.phone);
+
   Serial.println(F("EEPROM_INIT_Done.."));
 }
 //=======================================================================
@@ -416,15 +438,8 @@ void StartingInfo()
 //=======================       SETUP     ===============================
 void setup()
 {
-  // Set User Phone Number
-  for (int i = 0; i < 11; i++)
-  {
-    charPhoneNumber[i] = (char)(Config.phoneNumber[i] + '0');
-  }
-  Config.phone += charPhoneNumber;
-
   // Firmware version
-  Config.firmware = "0.9.5";
+  Config.firmware = "0.9.6";
   // UART Init
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -435,9 +450,6 @@ void setup()
   disp.clear();
   Serial.println(F("OLED...Done"));
   // Show starting info (Firmware)
-  Serial.print("Phone: ");
-  Serial.println(Config.phone);
-  delay(1000);
 
   StartingInfo();
   // RTC INIT
@@ -1128,8 +1140,13 @@ void DisplayHandler(uint8_t item)
 
       if (btUP.click())
       {
-        Config.UserSendTime1 > 23 ? Config.UserSendTime1 = 0 : Config.UserSendTime1++;
+        Config.UserSendTime1++;
 
+        if (Config.UserSendTime1 > 23)
+        {
+          Config.UserSendTime1 = 0;
+        }
+        
         disp.clear();
         disp.invertText(false);
         disp.setScale(2);
@@ -1146,7 +1163,12 @@ void DisplayHandler(uint8_t item)
 
       if (btDWN.click())
       {
-        Config.UserSendTime1 < 0 ? Config.UserSendTime1 = 23 : Config.UserSendTime1--;
+        Config.UserSendTime1--;
+
+        if (Config.UserSendTime1 < 0)
+        {
+          Config.UserSendTime1 = 23;
+        }
 
         disp.clear();
         disp.invertText(false);
@@ -1196,7 +1218,12 @@ void DisplayHandler(uint8_t item)
 
       if (btUP.click())
       {
-        Config.UserSendTime2 > 23 ? Config.UserSendTime2 = 0 : Config.UserSendTime2++;
+        Config.UserSendTime2++;
+
+        if (Config.UserSendTime2 > 23)
+        {
+          Config.UserSendTime2 = 0;
+        }
 
         disp.clear();
         disp.invertText(false);
@@ -1213,7 +1240,11 @@ void DisplayHandler(uint8_t item)
 
       if (btDWN.click())
       {
-        Config.UserSendTime2 < 0 ? Config.UserSendTime2 = 23 : Config.UserSendTime2--;
+        Config.UserSendTime2--;
+        if (Config.UserSendTime2 < 0)
+        {
+          Config.UserSendTime2 = 23;
+        }
 
         disp.clear();
         disp.invertText(false);
@@ -1260,7 +1291,7 @@ void DisplayHandler(uint8_t item)
 
   case SMS_NUM:
   {
-    int currentDigit = 9;
+    int currentDigit = 0;
 
     disp.clear();
     disp.setScale(2); // масштаб текста (1..4)
@@ -1281,7 +1312,7 @@ void DisplayHandler(uint8_t item)
 
     disp.update();
 
-    while (currentDigit != -1)
+    while (currentDigit != 10)
     {
       btSET.tick();
       btUP.tick();
@@ -1328,7 +1359,7 @@ void DisplayHandler(uint8_t item)
       // Exit Set CAlibration and SAVE settings
       if (btSET.click())
       {
-        currentDigit--;
+        currentDigit++;
 
         Serial.printf("Current Digit: %d", currentDigit);
         Serial.println();
@@ -1354,25 +1385,30 @@ void DisplayHandler(uint8_t item)
     {
       charPhoneNumber[i] = (char)(Config.phoneNumber[i] + '0');
     }
-    Config.phone = charPhoneNumber;
 
+    EEPROM.put(21, Config.phoneNumber);
+    EEPROM.commit();
+
+    Config.phone.clear(); // Clear String 
+    Config.phone += '+';
+    Config.phone += Config.iso_code;
+    Config.phone += charPhoneNumber;
+    
     Serial.printf("EEPROM: SMS Number: %s", Config.phone);
     Serial.println();
-
-    disp.invertText(false);
 
     System.DispMenu = Action;
     disp_ptr = 0;
     st = false;
 
     disp.clear();
-    disp.setScale(2); 
+    disp.setScale(2);
     disp.setCursor(13, 3);
+    disp.invertText(false);
     disp.print("Сохранено");
     disp.update();
     delay(500);
     disp.clear();
-
 
     break;
   }
@@ -1504,18 +1540,6 @@ void print_wakeup_reason()
   }
 }
 
-// Every 5 seconds  (get data from sensors)
-// void task0()
-// {
-//   // Serial.println("Task 5 sec");
-
-//   // GetBatVoltage();
-//   // GetBMEData();
-//   // GetDSData();
-//   // if (ST.Calibration == EEP_DONE)
-//   //   GetWeight();
-// }
-
 // Every 500ms Read RTC Data and Display control (Update/ON/OFF)
 void task500ms()
 {
@@ -1548,38 +1572,6 @@ void task500ms()
   }
 }
 
-// // Display Control
-// void task2()
-// {
-//   // task_counter++;
-
-//   // if (System.DispState)
-//   // {
-//   //   DisplayHandler(System.DispMenu);
-
-//   //   if (tmrSec < 59)
-//   //   {
-//   //     tmrSec++;
-//   //   }
-//   //   else
-//   //   {
-//   //     tmrSec = 0;
-//   //     tmrMin++;
-//   //   }
-//   // }
-//   // else
-//   //   disp.setPower(false);
-
-//   // if DISP_TIME
-//   // {
-//   //   System.DispState = false;
-//   //   Serial.println("TimeOut: Display - OFF");
-//   //   tmrMin = 0;
-//   //   tmrSec = 0;
-//   //   disp_ptr = 0;
-//   // }
-// }
-
 // Task every 1000ms (Get Voltage and Show Debug info)
 void task1000msDBG()
 {
@@ -1590,6 +1582,7 @@ void task1000msDBG()
 void ShowDBG()
 {
   char message[52];
+  String buf;
 
   Serial.println(F("!!!!!!!!!!!!!!  DEBUG INFO  !!!!!!!!!!!!!!!!!!"));
 
@@ -1607,6 +1600,9 @@ void ShowDBG()
   sprintf(message, "BAT: %003d", sensors.voltage);
   Serial.println(message);
   sprintf(message, "EEPROM: SMS_1 %02d | SMS_2 %02d", Config.UserSendTime1, Config.UserSendTime2);
+  Serial.println(message);
+
+  sprintf(message, "EEPROM: Phone: %s",Config.phone);
   Serial.println(message);
 
   Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));

@@ -69,9 +69,9 @@ struct GlobalConfig
 {
   uint16_t sn = 0;
 
-  String phone = "+7";    // номер телефона в международном формате
+  String phone = "";    // номер телефона в международном формате
   uint16_t iso_code = 7;
-  uint8_t phoneNumber[11] = {9,5,0,6,0,4,5,5,6,5};    // номер телефона в международном формате
+  uint8_t phoneNumber[10] = {0};    // номер телефона в международном формате
 
   String firmware = ""; // accepts from setup()
   // System_Information
@@ -120,7 +120,17 @@ struct SNS
 };
 extern SNS sensors;
 //=======================================================================
-
+struct EEP_Data
+{
+  uint8_t st_cal = 0;
+  uint8_t st_fstart = 0;
+  float calibr_factor = 0.0;
+  float g_contain = 0.0;
+  int8_t t1_sms = 0;
+  int8_t t2_sms = 0;
+  int8_t num[10] = {9,5,0,6,0,4,5,5,6,5}; 
+};
+extern EEP_Data eep_data;
 //=======================================================================
 struct Flag
 {
