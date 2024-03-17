@@ -56,13 +56,13 @@ boolean isStringMessage = false;
 
 RTC_DATA_ATTR int bootCount = 0;
 //================================ OBJECTs =============================
-#define OLED_SOFT_BUFFER_64 // Буфер на стороне МК
+#define OLED_SOFT_BUFFER_64 // MCU buffer
 GyverOLED<SSD1306_128x64> disp;
 
 // SSD1306 display(0x3c, 21, 22);
 // int frameCount = 4;
 
-GyverOS<4> os;
+GyverOS<2> os;
 HX711 scale; //
 HardwareSerial SIM800(1);
 // Serial1 SIM800(TX_PIN, RX_PIN);
@@ -87,15 +87,11 @@ void StartingInfo(void);
 void DisplayUPD(void);
 void ButtonHandler(void);
 void BeekeeperConroller(void);
-void Task500ms(void);
-void Task1000ms(void);
-void Task1MIN(void);
 void DisplayHandler(uint8_t item);
 void printPointer(uint8_t pointer);
 String waitResponse(void);
 String sendATCommand(String cmd, bool waiting);
 void sendSMS(String phone, String message);
-void MenuControl(void);
 void GetBatVoltage(void);
 void IncommingRing(void);
 void GetDSData(void);
@@ -103,14 +99,48 @@ void GetBMEData(void);
 void GetWeight(void);
 void ShowDBG(void);
 
-void task0(void);
-void task1(void);
-void task2(void);
-void task3(void);
+void task500ms(void);
+void task1000msDBG(void);
 
 void Task1Code(void *pvParameters);
 void Task2Code(void *pvParameters);
 //=======================================================================
+
+//=======================================================================
+void Task1Code(void *pvParameters)
+{
+  Serial.print("Task1 running on core ");
+  Serial.println(xPortGetCoreID());
+
+  for (;;)
+  {
+    if (millis() - tmr >= 500)
+    {
+      if (!ST.HX711_Block)
+      {
+        GetBatVoltage();
+        GetBMEData();
+        GetDSData();
+        if (ST.Calibration == EEP_DONE)
+          GetWeight();
+      }
+      tmr += 500;
+    }
+  }
+}
+
+void Task2Code(void *pvParameters)
+{
+  Serial.print("Task2 running on core ");
+  Serial.println(xPortGetCoreID());
+  for (;;)
+  {
+    os.tick();
+    ButtonHandler();
+    // IncommingRing();
+  }
+}
+//========================================================================
 
 //=======================   I2C Scanner     =============================
 void I2C_Scanning(void)
@@ -162,7 +192,7 @@ void EEPROM_Init()
   // ADRs: 0 - Calibration 4 - State_Calibration (Done or False) 5 - FirstStart State
   EEPROM.begin(100);
 
-  disp.setScale(2); // масштаб текста (1..4)
+  disp.setScale(2);
   disp.setCursor(13, 3);
   disp.print("Загрузка");
   disp.update();
@@ -266,7 +296,8 @@ void EEPROM_Init()
     scale.set_scale(sensors.calib);
   }
 
-  delay(3000);
+  // delay(3000);
+  delay(500);
 
   EEPROM.get(7, ST.FirstStart);
   Serial.printf("EEPROM: StartST: %d", ST.FirstStart);
@@ -305,7 +336,7 @@ void EEPROM_Init()
         Serial.println("Set zero DONE...");
 
         disp.clear();
-        disp.setScale(2); // масштаб текста (1..4)
+        disp.setScale(2);
         disp.setCursor(13, 3);
         disp.print("Сохранено");
         disp.update();
@@ -350,6 +381,8 @@ void EEPROM_Init()
   Serial.println(F("EEPROM_INIT_Done.."));
 }
 //=======================================================================
+
+//=======================================================================
 void StartingInfo()
 {
   char msg[32];
@@ -380,7 +413,7 @@ void StartingInfo()
 }
 //=======================================================================
 
-//=======================       SETUP     =============================
+//=======================       SETUP     ===============================
 void setup()
 {
   // Set User Phone Number
@@ -389,8 +422,9 @@ void setup()
     charPhoneNumber[i] = (char)(Config.phoneNumber[i] + '0');
   }
   Config.phone += charPhoneNumber;
+
   // Firmware version
-  Config.firmware = "0.9.3";
+  Config.firmware = "0.9.5";
   // UART Init
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -401,6 +435,10 @@ void setup()
   disp.clear();
   Serial.println(F("OLED...Done"));
   // Show starting info (Firmware)
+  Serial.print("Phone: ");
+  Serial.println(Config.phone);
+  delay(1000);
+  
   StartingInfo();
   // RTC INIT
   RTC.begin();
@@ -460,14 +498,12 @@ void setup()
   GetDSData();
   GetWeight();
 
-  os.attach(0, task0, 5000);
-  os.detach(0);
+  disp.update();
 
-  os.attach(1, task1, 500);
-  os.attach(2, task2, 500);
-  os.attach(3, task3, 1000);
+  os.attach(0, task500ms, 500);
+  os.attach(1, task1000msDBG, 1000);
 
-    // for(;;)
+  // for(;;)
   // {
   //   if (SIM800.available()) {
   //   // Если есть данные для чтения из RS485
@@ -498,54 +534,15 @@ void setup()
       NULL,
       1,
       &TaskCore1,
-      1
-   );
+      1);
   delay(500);
 }
-//=======================================================================
-void Task1Code(void *pvParameters)
-{
-  Serial.print("Task1 running on core ");
-  Serial.println(xPortGetCoreID());
 
-  for (;;)
-  {
-    if (millis() - tmr >= 500)
-    {
-      task0();
-      tmr += 500;
-    }
-  }
-}
-
-void Task2Code(void *pvParameters)
-{
-  Serial.print("Task2 running on core ");
-  Serial.println(xPortGetCoreID());
-  for (;;)
-  {
-    os.tick();
-    ButtonHandler();
-  }
-}
 //=========================      M A I N       ===========================
-void loop()
-{
-  // os.tick();
-  // ButtonHandler();
+void loop() {}
+//========================================================================
 
-  // IncommingRing();
-  // BeekeeperConroller();
-}
-//=======================================================================
-
-/*******************************************************************************************************/
-void BeekeeperConroller()
-{
-}
-/*******************************************************************************************************/
-
-/*******************************************************************************************************/
+//========================================================================
 void ButtonHandler()
 {
   uint16_t value = 0;
@@ -607,9 +604,6 @@ void ButtonHandler()
         System.DispMenu = Action;
         disp_ptr = 0;
         st = false;
-
-        os.start(0);
-        os.exec(0);
       }
     }
     else // enable display
@@ -622,8 +616,6 @@ void ButtonHandler()
     tmrMin = 0;
     tmrSec = 0;
     disp.clear();
-
-    os.exec(2);
   }
 
   if (btUP.click() || btUP.hold())
@@ -638,10 +630,39 @@ void ButtonHandler()
     Serial.println();
   }
 
-  if (btVirt.click())
+  if (btVirt.click() && System.DispMenu == Action)
   {
-    Serial.println("BTN_UP and BTN_DWN");
-    System.DispMenu = SetZero;
+    Serial.println("Set zero");
+    ST.HX711_Block = true;
+
+    char msg[50];
+
+    disp.clear();
+    disp.setScale(2);
+    disp.setCursor(0, 1);
+    disp.print(F(
+        " Установка \r\n"
+        "   нуля \r\n"
+        " подождите..  \r\n"));
+    disp.update();
+
+    sensors.units = scale.get_units(1) / 1000;
+    sensors.g_contain = sensors.units / -1;
+    delay(1000);
+
+    // now = millis();
+    // while (millis() - now < 5000)
+    // {
+    //   // Waiting 5 sec
+    // }
+
+    EEPROM.put(12, sensors.g_contain);
+    EEPROM.commit();
+
+    sprintf(msg, "WEIGHT: %0.1fg | W_UNIT: %0.4f  | W_EEP: %0.2f", sensors.kg, sensors.g_contain, sensors.g_eep);
+    Serial.println(msg);
+
+    ST.HX711_Block = false; // disable block task0;
     disp.clear();
   }
 
@@ -765,40 +786,23 @@ void GetDSData()
 // Get Data from HX711
 void GetWeight()
 {
-  scale.power_up();
   sensors.units = scale.get_units(1);
   sensors.kg = sensors.units / 1000;
   sensors.kg = sensors.kg + sensors.g_contain;
-  // protect
+  // user protect
   sensors.kg = constrain(sensors.kg, 0.0, 200.0);
-  scale.power_down();
-}
-/*******************************************************************************************************/
-
-/*******************************************************************************************************/
-void Task1MIN()
-{
-  if (task_counter == 60)
-  {
-    task_counter = 0;
-    GetBatVoltage();
-    GetBMEData();
-    GetDSData();
-  }
 }
 /*******************************************************************************************************/
 
 /******************************************* MAIN_MENU *************************************************/
 void DisplayHandler(uint8_t item)
 {
-
   switch (item)
   {
     char dispbuf[30];
-
   case Menu:
   {
-    os.stop(0);
+    // os.stop(0);
     disp.clear(); // Очищаем буфер
     disp.home();  // Курсор в левый верхний угол
     disp.setScale(1);
@@ -849,40 +853,7 @@ void DisplayHandler(uint8_t item)
     disp.update();
     break;
   }
-  case SetZero:
-  {
-    char msg[50];
 
-    disp.clear();
-    disp.setScale(2);
-    disp.setCursor(0, 1);
-    disp.print(F(
-        " Установка \r\n"
-        "   нуля \r\n"
-        " подождите..  \r\n"));
-    disp.update();
-
-    scale.power_up();
-    delay(500);
-    sensors.units = scale.get_units(10) / 1000;
-    sensors.g_contain = sensors.units / -1;
-    scale.power_down();
-
-    now = millis();
-    while (millis() - now < 5000)
-    {
-      // user code
-    }
-    EEPROM.put(12, sensors.g_contain);
-    EEPROM.commit();
-
-    sprintf(msg, "WEIGHT: %0.1fg | W_UNIT: %0.4f  | W_EEP: %0.2f", sensors.kg, sensors.g_contain, sensors.g_eep);
-    Serial.println(msg);
-
-    System.DispMenu = Action;
-    disp.clear();
-    break;
-  }
   case Time:
   {
     int8_t _hour = RTC.getHours();
@@ -1059,9 +1030,6 @@ void DisplayHandler(uint8_t item)
           disp.update();
           delay(500);
           disp.clear();
-          // Starting sensors request
-          os.start(0);
-          os.exec(0);
         }
       }
     }
@@ -1128,9 +1096,6 @@ void DisplayHandler(uint8_t item)
         disp.update();
         delay(500);
         disp.clear();
-        // Starting sensors request
-        os.start(0);
-        os.exec(0);
         return;
       }
     }
@@ -1145,80 +1110,15 @@ void DisplayHandler(uint8_t item)
     disp.setCursor(13, 0);
     disp.print("Время СМС");
     disp.setCursor(25, 3);
-    disp.printf("SMS1:%d", Config.UserSendTime1);
     disp.invertText(true);
+    disp.printf("SMS1:%d", Config.UserSendTime1);
+    disp.invertText(false);
     disp.setCursor(25, 5);
     disp.printf("SMS2:%d", Config.UserSendTime2);
     disp.update();
 
-    bool _setSMS1 = false;
-    bool _setSMS2 = true;
-    // Set SMS_2
-    while (_setSMS2)
-    {
-      btSET.tick();
-      btUP.tick();
-      btDWN.tick();
-
-      if (btUP.click())
-      {
-        Config.UserSendTime2 > 23 ? Config.UserSendTime2 = 0 : Config.UserSendTime2++;
-
-        disp.clear();
-        disp.invertText(false);
-        disp.setScale(2);
-        disp.setCursor(13, 0);
-        disp.print("Время СМС");
-        disp.setCursor(25, 3);
-        disp.printf("SMS1:%d", Config.UserSendTime1);
-        disp.invertText(true);
-        disp.setCursor(25, 5);
-        disp.printf("SMS2:%d", Config.UserSendTime2);
-        disp.update();
-      }
-
-      if (btDWN.click())
-      {
-        Config.UserSendTime2 < 0 ? Config.UserSendTime2 = 23 : Config.UserSendTime2--;
-
-        disp.clear();
-        disp.invertText(false);
-        disp.setScale(2);
-        disp.setCursor(13, 0);
-        disp.print("Время СМС");
-        disp.setCursor(25, 3);
-        disp.printf("SMS1:%d", Config.UserSendTime1);
-        disp.invertText(true);
-        disp.setCursor(25, 5);
-        disp.printf("SMS2:%d", Config.UserSendTime2);
-        disp.update();
-      }
-
-      // Exit Set Calibration and SAVE settings
-      if (btSET.click())
-      {
-        EEPROM.put(17, Config.UserSendTime2);
-        EEPROM.commit();
-
-        Serial.println(F("EEPROM: SMS_2_MSG SAVE"));
-
-        disp.clear();
-        disp.invertText(false);
-        disp.setScale(2);
-        disp.setCursor(13, 0);
-        disp.print("Время СМС");
-        disp.setCursor(25, 3);
-        disp.invertText(true);
-        disp.printf("SMS1:%d", Config.UserSendTime1);
-        disp.setCursor(25, 5);
-        disp.invertText(false);
-        disp.printf("SMS2:%d", Config.UserSendTime2);
-        disp.update();
-
-        _setSMS2 = false;
-        _setSMS1 = true;
-      }
-    }
+    bool _setSMS1 = true;
+    bool _setSMS2 = false;
     // Set SMS_1
     while (_setSMS1)
     {
@@ -1270,8 +1170,71 @@ void DisplayHandler(uint8_t item)
 
         Serial.println(F("EEPROM: SMS_1_MSG SAVE"));
 
+        disp.clear();
+        disp.invertText(false);
+        disp.setScale(2);
+        disp.setCursor(13, 0);
+        disp.print("Время СМС");
+        disp.setCursor(25, 3);
+        disp.invertText(false);
+        disp.printf("SMS1:%d", Config.UserSendTime1);
+        disp.setCursor(25, 5);
+        disp.invertText(true);
+        disp.printf("SMS2:%d", Config.UserSendTime2);
+        disp.update();
+
         _setSMS1 = false; // flag to EXIT
-        _setSMS2 = false; // flag to EXIT
+        _setSMS2 = true;  // flag to enter in set SMS2
+      }
+    }
+    // Set SMS_2
+    while (_setSMS2)
+    {
+      btSET.tick();
+      btUP.tick();
+      btDWN.tick();
+
+      if (btUP.click())
+      {
+        Config.UserSendTime2 > 23 ? Config.UserSendTime2 = 0 : Config.UserSendTime2++;
+
+        disp.clear();
+        disp.invertText(false);
+        disp.setScale(2);
+        disp.setCursor(13, 0);
+        disp.print("Время СМС");
+        disp.setCursor(25, 3);
+        disp.printf("SMS1:%d", Config.UserSendTime1);
+        disp.invertText(true);
+        disp.setCursor(25, 5);
+        disp.printf("SMS2:%d", Config.UserSendTime2);
+        disp.update();
+      }
+
+      if (btDWN.click())
+      {
+        Config.UserSendTime2 < 0 ? Config.UserSendTime2 = 23 : Config.UserSendTime2--;
+
+        disp.clear();
+        disp.invertText(false);
+        disp.setScale(2);
+        disp.setCursor(13, 0);
+        disp.print("Время СМС");
+        disp.setCursor(25, 3);
+        disp.printf("SMS1:%d", Config.UserSendTime1);
+        disp.invertText(true);
+        disp.setCursor(25, 5);
+        disp.printf("SMS2:%d", Config.UserSendTime2);
+        disp.update();
+      }
+
+      // Exit Set Calibration and SAVE settings
+      if (btSET.click())
+      {
+        EEPROM.put(17, Config.UserSendTime2);
+        EEPROM.commit();
+
+        Serial.println(F("EEPROM: SMS_2_MSG SAVE"));
 
         System.DispMenu = Action;
         disp_ptr = 0;
@@ -1288,9 +1251,8 @@ void DisplayHandler(uint8_t item)
         disp.update();
         delay(500);
         disp.clear();
-        // Starting sensors request
-        os.start(0);
-        os.exec(0);
+        _setSMS1 = false; // flag to EXIT
+        _setSMS2 = false; // flag to EXIT
       }
     }
     break;
@@ -1411,8 +1373,8 @@ void DisplayHandler(uint8_t item)
     delay(500);
     disp.clear();
     // Starting sensors request
-    os.start(0);
-    os.exec(0);
+    // os.start(0);
+    // os.exec(0);
 
     break;
   }
@@ -1545,28 +1507,21 @@ void print_wakeup_reason()
 }
 
 // Every 5 seconds  (get data from sensors)
-void task0()
-{
-  Serial.println("Task 5 sec");
+// void task0()
+// {
+//   // Serial.println("Task 5 sec");
 
-  GetBatVoltage();
-  GetBMEData();
-  GetDSData();
-  if (ST.Calibration == EEP_DONE)
-    GetWeight();
-}
+//   // GetBatVoltage();
+//   // GetBMEData();
+//   // GetDSData();
+//   // if (ST.Calibration == EEP_DONE)
+//   //   GetWeight();
+// }
 
-// Every 500ms (RTC) and HX711
-void task1()
+// Every 500ms Read RTC Data and Display control (Update/ON/OFF)
+void task500ms()
 {
   Clock = RTC.getTime();
-}
-
-// Display Control
-void task2()
-{
-  // task_counter++;
-  ButtonHandler();
 
   if (System.DispState)
   {
@@ -1595,8 +1550,40 @@ void task2()
   }
 }
 
-// Task every 1000ms
-void task3()
+// // Display Control
+// void task2()
+// {
+//   // task_counter++;
+
+//   // if (System.DispState)
+//   // {
+//   //   DisplayHandler(System.DispMenu);
+
+//   //   if (tmrSec < 59)
+//   //   {
+//   //     tmrSec++;
+//   //   }
+//   //   else
+//   //   {
+//   //     tmrSec = 0;
+//   //     tmrMin++;
+//   //   }
+//   // }
+//   // else
+//   //   disp.setPower(false);
+
+//   // if DISP_TIME
+//   // {
+//   //   System.DispState = false;
+//   //   Serial.println("TimeOut: Display - OFF");
+//   //   tmrMin = 0;
+//   //   tmrSec = 0;
+//   //   disp_ptr = 0;
+//   // }
+// }
+
+// Task every 1000ms (Get Voltage and Show Debug info)
+void task1000msDBG()
 {
   GetBatVoltage();
   ShowDBG();

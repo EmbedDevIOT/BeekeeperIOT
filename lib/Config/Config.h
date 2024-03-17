@@ -46,7 +46,6 @@ enum menu
 {
   Menu = 1,
   Action,
-  SetZero,
   Time,
   Calib,
   Notifycation,
@@ -70,8 +69,9 @@ struct GlobalConfig
 {
   uint16_t sn = 0;
 
-  String phone = "+";    // номер телефона в международном формате
-  uint8_t phoneNumber[11] = {7,9,5,0,6,0,4,5,5,6,5};    // номер телефона в международном формате
+  String phone = "+7";    // номер телефона в международном формате
+  uint16_t iso_code = 7;
+  uint8_t phoneNumber[11] = {9,5,0,6,0,4,5,5,6,5};    // номер телефона в международном формате
 
   String firmware = ""; // accepts from setup()
   // System_Information
@@ -124,6 +124,7 @@ extern SNS sensors;
 //=======================================================================
 struct Flag
 {
+  bool HX711_Block = false;
   uint8_t FirstStart = 0;
   uint8_t Calibration = 0;
 };
