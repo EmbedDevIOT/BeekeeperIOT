@@ -9,6 +9,9 @@
 #define DISP_TIME (tmrMin == 10 && tmrSec == 0)
 #define ITEMS 5 // Main Menu Items
 
+#define FILTER_STEP 5
+#define FILTER_COEF 0.05
+
 // GPIO PINs
 #define SET_PIN 18 // кнопкa Выбор
 #define PL_PIN 19  // кнопкa Плюс
@@ -37,6 +40,8 @@ Flag ST;
 
 //============================ GLOBAL VARIABLES =========================
 String _response = "";
+
+uint32_t ADC_buff[4] = {0};
 
 uint8_t task_counter = 0, task_cnt_10S = 0;
 float Calibration_Factor_Of_Load_cell = 23850; //-31;
@@ -98,6 +103,7 @@ void GetDSData(void);
 void GetBMEData(void);
 void GetWeight(void);
 void ShowDBG(void);
+void Notification(void);
 
 void task500ms(void);
 void task1000msDBG(void);
@@ -118,7 +124,6 @@ void Task1Code(void *pvParameters)
     {
       if (!ST.HX711_Block)
       {
-        GetBatVoltage();
         GetBMEData();
         GetDSData();
         if (ST.Calibration == EEP_DONE)
@@ -437,7 +442,7 @@ void StartingInfo()
 void setup()
 {
   // Firmware version
-  Config.firmware = "0.9.6";
+  Config.firmware = "0.9.7";
   // UART Init
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -485,11 +490,12 @@ void setup()
   delay(20);
   // Battery pin init
   pinMode(BAT, INPUT);
+  Serial.println(F("Battery Init...Done"));
 
   // SIM800 INIT
-  // // delay(15000);
-  // delay(2000);
-  // SIM800.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+
+  delay(2000);
+  SIM800.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
 
   // sendATCommand("AT", true);
   // sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
@@ -497,9 +503,9 @@ void setup()
   // _response = sendATCommand("AT+CMGF=1;&W", true);
   // _response = sendATCommand("AT+IFC=1, 1", true);
   // _response = sendATCommand("AT+CPBS=\"SM\"", true);
-  // _response = sendATCommand("AT+CLIP=1", true); // Включаем АОН
+  // _response = sendATCommand("AT+CLIP=1", true); // AON Enable
   // _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
-  // delay(10);
+  // // delay(10);
 
   disp.clear();
 
@@ -513,16 +519,6 @@ void setup()
   os.attach(0, task500ms, 500);
   os.attach(1, task1000msDBG, 1000);
 
-  // for(;;)
-  // {
-  //   if (SIM800.available()) {
-  //   // Если есть данные для чтения из RS485
-  //   char data = SIM800.read();
-  //   Serial.print("Получили данные: ");
-  //   Serial.println(data);
-  //   }
-  // }
-
   // FreeRTOS
   // Create Task. Running to core 0
   xTaskCreatePinnedToCore(
@@ -530,7 +526,7 @@ void setup()
       "TaskCore0", // Имя задачи
       10000,       // Размер стека
       NULL,        // Параметр задачи
-      1,           // Приоритет
+      0,           // Приоритет
       &TaskCore0,  // Выполняемая операция
       0            // Номер ядра
   );
@@ -550,6 +546,21 @@ void setup()
 
 //=========================      M A I N       ===========================
 void loop() {}
+//========================================================================
+
+//========================================================================
+void Notification()
+{
+  if (ST.SMS1 && Clock.hour == Config.UserSendTime1 && Clock.minute == 0 && Clock.second == 0)
+  {
+
+  }
+
+  if (ST.SMS2 && Clock.hour == Config.UserSendTime2 && Clock.minute == 0 && Clock.second == 0)
+  {
+
+  }
+}
 //========================================================================
 
 //========================================================================
@@ -809,19 +820,18 @@ void DisplayHandler(uint8_t item)
   case Menu:
   {
     disp.clear();
-    disp.home();  
+    disp.home();
     disp.setScale(1);
-    disp.print 
-        (F(
-            "  Время:\r\n"
-            "  Калибровка:\r\n"
-            "  Оповещения:\r\n"
-            // "  Аккумулятор:\r\n"
-            "  Номер СМС:\r\n"
-            "  Выход:\r\n"));
+    disp.print(F(
+        "  Время:\r\n"
+        "  Калибровка:\r\n"
+        "  Оповещения:\r\n"
+        // "  Аккумулятор:\r\n"
+        "  Номер СМС:\r\n"
+        "  Выход:\r\n"));
 
     printPointer(disp_ptr); // Show pointer
-    disp.update();         
+    disp.update();
     break;
   }
 
@@ -1039,6 +1049,7 @@ void DisplayHandler(uint8_t item)
     }
     break;
   }
+
   case Calib:
   {
     disp.clear();
@@ -1046,8 +1057,10 @@ void DisplayHandler(uint8_t item)
     disp.setCursor(0, 0);
     disp.print("Калибровка");
     disp.setCursor(17, 5);
-    disp.printf("- %0.2f +", sensors.g_contain);
+    disp.printf("  %0.2f  ", sensors.kg);
     disp.update();
+
+    Serial.printf("Calibration: %0.2f\r\n", sensors.g_contain);
 
     while (1)
     {
@@ -1060,12 +1073,14 @@ void DisplayHandler(uint8_t item)
         sensors.g_contain += 0.01;
 
         disp.clear();
-        disp.setScale(2); 
+        disp.setScale(2);
         disp.setCursor(0, 0);
         disp.print("Калибровка");
         disp.setCursor(17, 5);
-        disp.printf("- %0.2f +", sensors.g_contain);
+        disp.printf("  %0.2f  ", sensors.kg);
+        // disp.printf("- %0.2f +", sensors.g_contain);
         disp.update();
+        Serial.printf("Calibration: %0.2f\r\n", sensors.g_contain);
       }
 
       if (btDWN.click())
@@ -1073,12 +1088,14 @@ void DisplayHandler(uint8_t item)
         sensors.g_contain -= 0.01;
 
         disp.clear();
-        disp.setScale(2); 
+        disp.setScale(2);
         disp.setCursor(0, 0);
         disp.print("Калибровка");
         disp.setCursor(17, 5);
-        disp.printf("- %0.2f +", sensors.g_contain);
+        disp.printf("  %0.2f  ", sensors.kg);
+        // disp.printf("- %0.2f +", sensors.g_contain);
         disp.update();
+        Serial.printf("Calibration: %0.2f\r\n", sensors.g_contain);
       }
 
       // Exit Set CAlibration and SAVE settings
@@ -1094,7 +1111,7 @@ void DisplayHandler(uint8_t item)
         st = false;
 
         disp.clear();
-        disp.setScale(2); 
+        disp.setScale(2);
         disp.setCursor(13, 3);
         disp.print("Сохранено");
         disp.update();
@@ -1138,7 +1155,7 @@ void DisplayHandler(uint8_t item)
         {
           Config.UserSendTime1 = 0;
         }
-        
+
         disp.clear();
         disp.invertText(false);
         disp.setScale(2);
@@ -1286,7 +1303,7 @@ void DisplayHandler(uint8_t item)
     int currentDigit = 0;
 
     disp.clear();
-    disp.setScale(2); 
+    disp.setScale(2);
     disp.setCursor(0, 0);
     disp.print("СМС Номер:");
 
@@ -1315,7 +1332,7 @@ void DisplayHandler(uint8_t item)
         Config.phoneNumber[currentDigit] = (Config.phoneNumber[currentDigit] + 1) % 10;
 
         disp.clear();
-        disp.setScale(2); 
+        disp.setScale(2);
         disp.invertText(false);
         disp.setCursor(0, 0);
         disp.print("СМС Номер:");
@@ -1334,7 +1351,7 @@ void DisplayHandler(uint8_t item)
         Config.phoneNumber[currentDigit] = (Config.phoneNumber[currentDigit] - 1 + 10) % 10;
 
         disp.clear();
-        disp.setScale(2); 
+        disp.setScale(2);
         disp.invertText(false);
         disp.setCursor(0, 0);
         disp.print("СМС Номер:");
@@ -1357,7 +1374,7 @@ void DisplayHandler(uint8_t item)
         Serial.println();
 
         disp.clear();
-        disp.setScale(2); 
+        disp.setScale(2);
         disp.invertText(false);
         disp.setCursor(0, 0);
         disp.print("СМС Номер:");
@@ -1380,11 +1397,11 @@ void DisplayHandler(uint8_t item)
     EEPROM.put(21, Config.phoneNumber);
     EEPROM.commit();
 
-    Config.phone.clear(); // Clear String 
+    Config.phone.clear(); // Clear String
     Config.phone += '+';
     Config.phone += Config.iso_code;
     Config.phone += charPhoneNumber;
-    
+
     Serial.printf("EEPROM: SMS Number: %s", Config.phone);
     Serial.println();
 
@@ -1469,30 +1486,36 @@ void sendSMS(String phone, String message)
 /*******************************************************************************************************/
 
 /*******************************************************************************************************/
-void GetBatVoltage()
+void GetBatVoltage(void)
 {
   uint32_t _mv = 0;
+  // 12.82 - 1195
+  // 10.8  - 1010
+  const uint16_t min = 1010, max = 1195;
   // 1250 = 10.8
   // 1380 = 12.82
+  // const uint16_t min = 1250, max = 1390;
 
-  for (uint8_t i = 0; i <= 4; i++)
+  for (uint8_t i = 0; i < 12; i++)
   {
     _mv += analogReadMilliVolts(BAT);
   }
-  _mv = _mv / 4;
+  _mv = _mv / 12;
 
-  if (_mv == 0 || _mv < 1250)
+  Serial.println(_mv);
+
+  if (_mv == 0 || _mv < min)
   {
     _mv = 0;
   }
-  else if (_mv >= 1250 && _mv <= 1480)
+  else if (_mv >= min && _mv <= max)
   {
-    _mv = map(_mv, 1250, 1480, 10, 100);
+    _mv = map(_mv, min, max, 10, 100);
   }
-  else if (_mv > 1480)
+  else if (_mv > max)
   {
-    _mv = 1480;
-    _mv = map(_mv, 1250, 1480, 10, 100);
+    _mv = max;
+    _mv = map(_mv, min, max, 10, 100);
   }
   sensors.voltage = _mv;
 }
@@ -1534,9 +1557,9 @@ void task500ms()
 void task1000msDBG()
 {
   GetBatVoltage();
-  #ifdef DEBUG
+#ifdef DEBUG
   ShowDBG();
-  #endif
+#endif
 }
 
 void ShowDBG()
@@ -1562,7 +1585,7 @@ void ShowDBG()
   sprintf(message, "EEPROM: SMS_1 %02d | SMS_2 %02d", Config.UserSendTime1, Config.UserSendTime2);
   Serial.println(message);
 
-  sprintf(message, "EEPROM: Phone: %s",Config.phone);
+  sprintf(message, "EEPROM: Phone: %s", Config.phone);
   Serial.println(message);
 
   Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));

@@ -69,9 +69,9 @@ struct GlobalConfig
 {
   uint16_t sn = 0;
 
-  String phone = "";    // номер телефона в международном формате
+  String phone = ""; // номер телефона в международном формате
   uint16_t iso_code = 7;
-  uint8_t phoneNumber[10] = {0};    // номер телефона в международном формате
+  uint8_t phoneNumber[10] = {0}; // номер телефона в международном формате
 
   String firmware = ""; // accepts from setup()
   // System_Information
@@ -94,12 +94,12 @@ extern GlobalConfig Config;
 //=======================================================================
 struct SYTM
 {
-  bool RelayState = false;
   bool DispState = true;
   uint8_t DispMenu = Action;
 };
 extern SYTM System;
 //=======================================================================
+
 struct SNS
 {
   float dsT = 0.0;     // Temperature DS18B20
@@ -127,12 +127,14 @@ struct EEP_Data
   float g_contain = 0.0;
   int8_t t1_sms = 0;
   int8_t t2_sms = 0;
-  int8_t num[10] = {9,5,0,6,0,4,5,5,6,5}; 
+  int8_t num[10] = {9, 5, 0, 6, 0, 4, 5, 5, 6, 5};
 };
 extern EEP_Data eep_data;
 //=======================================================================
 struct Flag
 {
+  bool SMS1 = true;
+  bool SMS2 = true;
   bool HX711_Block = false;
   uint8_t FirstStart = 0;
   uint8_t Calibration = 0;
