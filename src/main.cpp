@@ -120,17 +120,19 @@ void Task1Code(void *pvParameters)
 
   for (;;)
   {
-    if (millis() - tmr >= 500)
+    if (!ST.HX711_Block && millis() - tmr >= 500)
     {
-      if (!ST.HX711_Block)
-      {
-        GetBMEData();
-        GetDSData();
-        if (ST.Calibration == EEP_DONE)
-          GetWeight();
-      }
+      // if (!ST.HX711_Block)
+      // {
+      GetBMEData();
+      GetDSData();
+      if (ST.Calibration == EEP_DONE)
+        GetWeight();
+      // }
       tmr += 500;
     }
+
+   
   }
 }
 
@@ -140,9 +142,13 @@ void Task2Code(void *pvParameters)
   Serial.println(xPortGetCoreID());
   for (;;)
   {
-    os.tick();
-    ButtonHandler();
-    // IncommingRing();
+    // if (!ST.Call_Block)
+    // {
+    //   os.tick();
+    //   ButtonHandler();
+    // }
+    // Notification();
+     IncommingRing();
   }
 }
 //========================================================================
@@ -442,7 +448,7 @@ void StartingInfo()
 void setup()
 {
   // Firmware version
-  Config.firmware = "0.9.7";
+  Config.firmware = "0.9.7a";
   // UART Init
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -497,15 +503,15 @@ void setup()
   delay(2000);
   SIM800.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
 
-  // sendATCommand("AT", true);
-  // sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
+  sendATCommand("AT", true);
+  sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
 
-  // _response = sendATCommand("AT+CMGF=1;&W", true);
-  // _response = sendATCommand("AT+IFC=1, 1", true);
-  // _response = sendATCommand("AT+CPBS=\"SM\"", true);
-  // _response = sendATCommand("AT+CLIP=1", true); // AON Enable
-  // _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
-  // // delay(10);
+  _response = sendATCommand("AT+CMGF=1;&W", true);
+  _response = sendATCommand("AT+IFC=1, 1", true);
+  _response = sendATCommand("AT+CPBS=\"SM\"", true);
+  _response = sendATCommand("AT+CLIP=1", true); // AON Enable
+  _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
+  // delay(10);
 
   disp.clear();
 
@@ -551,14 +557,19 @@ void loop() {}
 //========================================================================
 void Notification()
 {
-  if (ST.SMS1 && Clock.hour == Config.UserSendTime1 && Clock.minute == 0 && Clock.second == 0)
+  if (ST.SMS1 && Clock.hour == Config.UserSendTime1 && Clock.minute == 40 && Clock.second == 0)
   {
 
+    Serial.println("Send SMS1");
+    ST.SMS1 = false;
+    ST.SMS2 = true;
   }
 
   if (ST.SMS2 && Clock.hour == Config.UserSendTime2 && Clock.minute == 0 && Clock.second == 0)
   {
-
+    Serial.println("Send SMS2");
+    ST.SMS1 = true;
+    ST.SMS2 = false;
   }
 }
 //========================================================================
@@ -696,40 +707,41 @@ void ButtonHandler()
     Serial.println();
   }
 
-  // if (btSET.hasClicks(2))
-  // {
-  //   Serial.println("Has double cliks");
-  //   Serial.println("---------------------");
+  if (btSET.hasClicks(2))
+  {
+    ST.debug == false ? ST.debug = true : ST.debug = false;
+    //   Serial.println("Has double cliks");
+    //   Serial.println("---------------------");
 
-  //   String sms = "Bec: ";
+    //   String sms = "Bec: ";
 
-  //   sms += String(sensors.kg, 1);
-  //   sms += " Kg";
-  //   sms += "\n";
-  //   sms += "B: ";
-  //   sms += sensors.voltage;
-  //   sms += " %";
-  //   sms += "\n";
-  //   sms += "T1: ";
-  //   sms += String(sensors.dsT, 1);
-  //   sms += " *C";
-  //   sms += "\n";
-  //   sms += "T2: ";
-  //   sms += String(sensors.bmeT, 1);
-  //   sms += " *C";
-  //   sms += "\n";
-  //   sms += "H: ";
-  //   sms += sensors.bmeH;
-  //   sms += " %";
-  //   sms += "\n";
-  //   sms += "Pr: ";
-  //   sms += sensors.bmeP_mmHg;
+    //   sms += String(sensors.kg, 1);
+    //   sms += " Kg";
+    //   sms += "\n";
+    //   sms += "B: ";
+    //   sms += sensors.voltage;
+    //   sms += " %";
+    //   sms += "\n";
+    //   sms += "T1: ";
+    //   sms += String(sensors.dsT, 1);
+    //   sms += " *C";
+    //   sms += "\n";
+    //   sms += "T2: ";
+    //   sms += String(sensors.bmeT, 1);
+    //   sms += " *C";
+    //   sms += "\n";
+    //   sms += "H: ";
+    //   sms += sensors.bmeH;
+    //   sms += " %";
+    //   sms += "\n";
+    //   sms += "Pr: ";
+    //   sms += sensors.bmeP_mmHg;
 
-  //   Serial.println(sms);
-  //   Serial.println("---------------------");
+    //   Serial.println(sms);
+    //   Serial.println("---------------------");
 
-  //   sendSMS(Config.phone, sms);
-  // }
+    //   sendSMS(Config.phone, sms);
+  }
 }
 /*******************************************************************************************************/
 
@@ -743,38 +755,60 @@ void IncommingRing()
     Serial.println(_response);
     if (_response.startsWith("RING"))
     {
+      ST.HX711_Block = true;
+      char buf[128] = "";
+
       int phoneindex = _response.indexOf("+CLIP: \"");
       String innerPhone = "";
+
       if (phoneindex >= 0)
       {
         phoneindex += 8;
         innerPhone = _response.substring(phoneindex, _response.indexOf("\"", phoneindex));
         Serial.println("Number: " + innerPhone);
-        delay(500);
+        // delay(500);
         sendATCommand("ATH", true);
-        delay(500);
+        // delay(500);
+        strcat(buf, "W:");
+        dtostrf(sensors.kg, 3, 1, buf);
+        strcat(buf, "kg\n");
+        strcat(buf, "T1:");
+        dtostrf(sensors.dsT, 3, 1, buf);
+        strcat(buf, "\n");
+        strcat(buf, "T2:");
+        dtostrf(sensors.bmeT, 3, 1, buf);
+        strcat(buf, "\n");
+        strcat(buf, "H:");
+        itoa(sensors.bmeH, buf + strlen(buf), DEC);
+        strcat(buf, "\n");
+        strcat(buf, "P:");
+        itoa(sensors.bmeP_mmHg, buf + strlen(buf), DEC);
+        Serial.println(buf);
 
-        String smska = "Bec: ";
-        smska += String(sensors.kg, 1);
-        smska += " Kg";
-        smska += "\n";
-        smska += "T1:";
-        smska += String(sensors.dsT, 1);
-        smska += "\n";
-        smska += "T2";
-        smska += String(sensors.bmeT, 1);
-        smska += "\n";
-        smska += "H:";
-        smska += String(sensors.bmeH, 1);
-        smska += "\n";
-        smska += "Pr:";
-        smska += String(sensors.bmeP_mmHg);
+        // String smska = "W: ";
+        // smska += String(sensors.kg, 1);
+        // smska += " Kg\n";
+        // // smska += "\n";
+        // smska += "T1:" + String(sensors.dsT, 1) + "\n";
+        // // smska += String(sensors.dsT, 1);
+        // // smska += "\n";
+        // smska += "T2:" + String(sensors.bmeT, 1) + "\n";
+        // // smska += String(sensors.bmeT, 1);
+        // // smska += "\n";
+        // smska += "H:";
+        // smska += sensors.bmeH;
+        // smska += "\n";
+        // smska += "Pr:";
+        // smska += sensors.bmeP_mmHg;
+        // Serial.println(smska);
 
-        Serial.println(smska);
+        Serial.println(buf);
         // sendSMS(innerPhone, smska); // смс
         // delay(2000);
       }
     }
+    else
+      ST.HX711_Block = false;
   }
 }
 /*******************************************************************************************************/
@@ -1557,8 +1591,12 @@ void task500ms()
 void task1000msDBG()
 {
   GetBatVoltage();
+
 #ifdef DEBUG
-  ShowDBG();
+  if (ST.debug)
+  {
+    ShowDBG();
+  }
 #endif
 }
 

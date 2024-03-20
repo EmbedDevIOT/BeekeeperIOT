@@ -133,9 +133,11 @@ extern EEP_Data eep_data;
 //=======================================================================
 struct Flag
 {
+  bool debug = true;
   bool SMS1 = true;
   bool SMS2 = true;
   bool HX711_Block = false;
+  bool Call_Block = false;
   uint8_t FirstStart = 0;
   uint8_t Calibration = 0;
 };
