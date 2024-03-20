@@ -67,7 +67,7 @@ GyverOLED<SSD1306_128x64> disp;
 // SSD1306 display(0x3c, 21, 22);
 // int frameCount = 4;
 
-GyverOS<2> os;
+// GyverOS<2> os;
 HX711 scale; //
 HardwareSerial SIM800(1);
 // Serial1 SIM800(TX_PIN, RX_PIN);
@@ -82,8 +82,10 @@ VirtButton btVirt;
 OneWire oneWire(DS_SNS);
 DallasTemperature ds18b20(&oneWire);
 // Freertos Create Task object
-TaskHandle_t TaskCore0;
-TaskHandle_t TaskCore1;
+TaskHandle_t Task0; // Task pinned to Core 0
+TaskHandle_t Task1; // Task pinned to Core 1
+TaskHandle_t Task2; // Task pinned to Core 1 (every 500 ms)
+TaskHandle_t Task3; // Task pinned to Core 1 (every 1000 ms)
 //=======================================================================
 
 //================================ PROTOTIPs =============================
@@ -105,52 +107,106 @@ void GetWeight(void);
 void ShowDBG(void);
 void Notification(void);
 
-void task500ms(void);
-void task1000msDBG(void);
+// void Task500ms(void);
+// void Task1000msDBG(void);
 
-void Task1Code(void *pvParameters);
-void Task2Code(void *pvParameters);
+void TaskCore0(void *pvParameters);
+void TaskCore1(void *pvParameters);
+void Task500ms(void *pvParameters);
+void Task1000ms(void *pvParameters);
+
 //=======================================================================
 
 //=======================================================================
-void Task1Code(void *pvParameters)
+void TaskCore0(void *pvParameters)
 {
   Serial.print("Task1 running on core ");
   Serial.println(xPortGetCoreID());
 
   for (;;)
   {
-    if (!ST.HX711_Block && millis() - tmr >= 500)
+    if (!ST.HX711_Block)
     {
-      // if (!ST.HX711_Block)
-      // {
       GetBMEData();
       GetDSData();
       if (ST.Calibration == EEP_DONE)
         GetWeight();
-      // }
-      tmr += 500;
     }
-
-   
+    vTaskDelay(500 / portTICK_RATE_MS);
   }
 }
 
-void Task2Code(void *pvParameters)
+void TaskCore1(void *pvParameters)
 {
   Serial.print("Task2 running on core ");
   Serial.println(xPortGetCoreID());
   for (;;)
   {
-    // if (!ST.Call_Block)
-    // {
-    //   os.tick();
-    //   ButtonHandler();
-    // }
-    // Notification();
-     IncommingRing();
+    Notification();
+    ButtonHandler();
+    IncommingRing();
   }
 }
+
+// Every 500ms Read RTC Data and Display control (Update/ON/OFF)
+void Task500ms(void *pvParameters)
+{
+  Serial.print("Task500 running on core ");
+  Serial.println(xPortGetCoreID());
+  while (true)
+  {
+    Clock = RTC.getTime();
+
+    if (System.DispState)
+    {
+      DisplayHandler(System.DispMenu);
+
+      if (tmrSec < 59)
+      {
+        tmrSec++;
+      }
+      else
+      {
+        tmrSec = 0;
+        tmrMin++;
+      }
+    }
+    else
+      disp.setPower(false);
+
+    if DISP_TIME
+    {
+      System.DispState = false;
+      Serial.println("TimeOut: Display - OFF");
+      tmrMin = 0;
+      tmrSec = 0;
+      disp_ptr = 0;
+    }
+    vTaskDelay(300 / portTICK_RATE_MS);
+  }
+}
+
+// Task every 1000ms (Get Voltage and Show Debug info)
+
+void Task1000ms(void *pvParameters)
+{
+  Serial.print("Task1000 running on core ");
+  Serial.println(xPortGetCoreID());
+  while (1)
+  {
+    GetBatVoltage();
+
+#ifdef DEBUG
+    if (ST.debug)
+    {
+      ShowDBG();
+    }
+#endif
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
 //========================================================================
 
 //=======================   I2C Scanner     =============================
@@ -448,7 +504,7 @@ void StartingInfo()
 void setup()
 {
   // Firmware version
-  Config.firmware = "0.9.7a";
+  Config.firmware = "0.9.7b";
   // UART Init
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -522,32 +578,51 @@ void setup()
 
   disp.update();
 
-  os.attach(0, task500ms, 500);
-  os.attach(1, task1000msDBG, 1000);
+  // os.attach(0, task500ms, 500);
+  // os.attach(1, task1000msDBG, 1000);
 
   // FreeRTOS
   // Create Task. Running to core 0
   xTaskCreatePinnedToCore(
-      Task1Code,   // Функция для задачи
-      "TaskCore0", // Имя задачи
-      10000,       // Размер стека
-      NULL,        // Параметр задачи
-      0,           // Приоритет
-      &TaskCore0,  // Выполняемая операция
-      0            // Номер ядра
+      TaskCore0, // Функция для задачи
+      "Task0",   // Имя задачи
+      10000,     // Размер стека
+      NULL,      // Параметр задачи
+      0,         // Приоритет
+      &Task0,    // Выполняемая операция
+      0          // Номер ядра
   );
-  delay(500);
+  delay(100);
 
   // Create Task. Running to core 1
   xTaskCreatePinnedToCore(
-      Task2Code,
-      "TaskCore1",
+      TaskCore1,
+      "Task1",
       10000,
       NULL,
       1,
-      &TaskCore1,
+      &Task1,
       1);
-  delay(500);
+  delay(100);
+
+  xTaskCreatePinnedToCore(
+      Task500ms,
+      "Task2",
+      2048,
+      NULL,
+      1,
+      &Task2,
+      1);
+  delay(100);
+
+  xTaskCreatePinnedToCore(
+      Task1000ms,
+      "Task30",
+      2048,
+      NULL,
+      1,
+      &Task3,
+      1);
 }
 
 //=========================      M A I N       ===========================
@@ -1556,49 +1631,49 @@ void GetBatVoltage(void)
 /*******************************************************************************************************/
 
 // Every 500ms Read RTC Data and Display control (Update/ON/OFF)
-void task500ms()
-{
-  Clock = RTC.getTime();
+// void Task500ms()
+// {
+//   Clock = RTC.getTime();
 
-  if (System.DispState)
-  {
-    DisplayHandler(System.DispMenu);
+//   if (System.DispState)
+//   {
+//     DisplayHandler(System.DispMenu);
 
-    if (tmrSec < 59)
-    {
-      tmrSec++;
-    }
-    else
-    {
-      tmrSec = 0;
-      tmrMin++;
-    }
-  }
-  else
-    disp.setPower(false);
+//     if (tmrSec < 59)
+//     {
+//       tmrSec++;
+//     }
+//     else
+//     {
+//       tmrSec = 0;
+//       tmrMin++;
+//     }
+//   }
+//   else
+//     disp.setPower(false);
 
-  if DISP_TIME
-  {
-    System.DispState = false;
-    Serial.println("TimeOut: Display - OFF");
-    tmrMin = 0;
-    tmrSec = 0;
-    disp_ptr = 0;
-  }
-}
+//   if DISP_TIME
+//   {
+//     System.DispState = false;
+//     Serial.println("TimeOut: Display - OFF");
+//     tmrMin = 0;
+//     tmrSec = 0;
+//     disp_ptr = 0;
+//   }
+// }
 
 // Task every 1000ms (Get Voltage and Show Debug info)
-void task1000msDBG()
-{
-  GetBatVoltage();
+// void task1000msDBG()
+// {
+//   GetBatVoltage();
 
-#ifdef DEBUG
-  if (ST.debug)
-  {
-    ShowDBG();
-  }
-#endif
-}
+// #ifdef DEBUG
+//   if (ST.debug)
+//   {
+//     ShowDBG();
+//   }
+// #endif
+// }
 
 void ShowDBG()
 {
