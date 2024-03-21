@@ -87,7 +87,7 @@ TaskHandle_t Task1; // Task pinned to Core 1
 TaskHandle_t Task2; // Task pinned to Core 1 (every 500 ms)
 TaskHandle_t Task3; // Task pinned to Core 1 (every 1000 ms)
 // FreeRTOS create Mutex link
-SemaphoreHandle_t uart_mutex; 
+SemaphoreHandle_t uart_mutex;
 
 //=======================================================================
 
@@ -128,13 +128,13 @@ void TaskCore0(void *pvParameters)
 
   for (;;)
   {
-    if (!ST.HX711_Block)
-    {
-      GetBMEData();
-      GetDSData();
-      if (ST.Calibration == EEP_DONE)
-        GetWeight();
-    }
+    // if (!ST.HX711_Block)
+    // {
+    //   GetBMEData();
+    //   GetDSData();
+    //   if (ST.Calibration == EEP_DONE)
+    //     GetWeight();
+    // }
     vTaskDelay(500 / portTICK_RATE_MS);
   }
 }
@@ -145,46 +145,48 @@ void TaskCore1(void *pvParameters)
   Serial.println(xPortGetCoreID());
   for (;;)
   {
-    Notification();
-    ButtonHandler();
+    // Notification();
+    // ButtonHandler();
     IncommingRing();
+
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
 
 // Every 500ms Read RTC Data and Display control (Update/ON/OFF)
 void Task500ms(void *pvParameters)
 {
-  Serial.print("Task500 running on core ");
+  Serial.print("Task300 running on core ");
   Serial.println(xPortGetCoreID());
   while (true)
   {
     Clock = RTC.getTime();
 
-    if (System.DispState)
-    {
-      DisplayHandler(System.DispMenu);
+    // if (System.DispState)
+    // {
+    //   DisplayHandler(System.DispMenu);
 
-      if (tmrSec < 59)
-      {
-        tmrSec++;
-      }
-      else
-      {
-        tmrSec = 0;
-        tmrMin++;
-      }
-    }
-    else
-      disp.setPower(false);
+    //   if (tmrSec < 59)
+    //   {
+    //     tmrSec++;
+    //   }
+    //   else
+    //   {
+    //     tmrSec = 0;
+    //     tmrMin++;
+    //   }
+    // }
+    // else
+    //   disp.setPower(false);
 
-    if DISP_TIME
-    {
-      System.DispState = false;
-      Serial.println("TimeOut: Display - OFF");
-      tmrMin = 0;
-      tmrSec = 0;
-      disp_ptr = 0;
-    }
+    // if DISP_TIME
+    // {
+    //   System.DispState = false;
+    //   Serial.println("TimeOut: Display - OFF");
+    //   tmrMin = 0;
+    //   tmrSec = 0;
+    //   disp_ptr = 0;
+    // }
     vTaskDelay(300 / portTICK_RATE_MS);
   }
 }
@@ -199,14 +201,14 @@ void Task1000ms(void *pvParameters)
   {
     GetBatVoltage();
 
-#ifdef DEBUG
-    if (ST.debug)
-    {
-      xSemaphoreTake(uart_mutex, portMAX_DELAY); 
-      ShowDBG();
-      xSemaphoreGive(uart_mutex);
-    }
-#endif
+    // #ifdef DEBUG
+    //     if (ST.debug)
+    //     {
+    //       xSemaphoreTake(uart_mutex, portMAX_DELAY);
+    //       ShowDBG();
+    //       xSemaphoreGive(uart_mutex);
+    //     }
+    // #endif
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
@@ -593,7 +595,7 @@ void setup()
       "Task0",   // Имя задачи
       10000,     // Размер стека
       NULL,      // Параметр задачи
-      0,         // Приоритет
+      1,         // Приоритет
       &Task0,    // Выполняемая операция
       0          // Номер ядра
   );
@@ -735,7 +737,8 @@ void ButtonHandler()
     tmrSec = 0;
     if (System.DispMenu == Menu)
       disp_ptr = constrain(disp_ptr + 1, 0, ITEMS - 1);
-      else IncommingRing();
+    else
+      IncommingRing();
 
     Serial.printf("ptr:%d", disp_ptr);
     Serial.println();
@@ -832,67 +835,68 @@ void IncommingRing()
 {
   if (SIM800.available())
   {
-    xSemaphoreTake(uart_mutex, portMAX_DELAY); 
+    // xSemaphoreTake(uart_mutex, portMAX_DELAY);
     _response = waitResponse();
     _response.trim();
-    // Serial.println(_response);
-    if (_response.startsWith("RING"))
-    {
-      ST.HX711_Block = true;
-      // char buf[128] = "";
+    Serial.println(_response);
 
-      // int phoneindex = _response.indexOf("+CLIP: \"");
-      // String innerPhone = "";
+    // if (_response.startsWith("RING"))
+    // {
+    //   ST.HX711_Block = true;
+    //   // char buf[128] = "";
 
-      // if (phoneindex >= 0)
-      // {
-      //   phoneindex += 8;
-      //   innerPhone = _response.substring(phoneindex, _response.indexOf("\"", phoneindex));
-        // Serial.println("Number: " + innerPhone);
-        // delay(500);
-        sendATCommand("ATH", true);
+    //   // int phoneindex = _response.indexOf("+CLIP: \"");
+    //   // String innerPhone = "";
 
-        // delay(500);
-        // strcat(buf, "W:");
-        // dtostrf(sensors.kg, 3, 1, buf);
-        // strcat(buf, "kg\n");
-        // strcat(buf, "T1:");
-        // dtostrf(sensors.dsT, 3, 1, buf);
-        // strcat(buf, "\n");
-        // strcat(buf, "T2:");
-        // dtostrf(sensors.bmeT, 3, 1, buf);
-        // strcat(buf, "\n");
-        // strcat(buf, "H:");
-        // itoa(sensors.bmeH, buf + strlen(buf), DEC);
-        // strcat(buf, "\n");
-        // strcat(buf, "P:");
-        // itoa(sensors.bmeP_mmHg, buf + strlen(buf), DEC);
-        // Serial.println(buf);
+    //   // if (phoneindex >= 0)
+    //   // {
+    //   //   phoneindex += 8;
+    //   //   innerPhone = _response.substring(phoneindex, _response.indexOf("\"", phoneindex));
+    //   // Serial.println("Number: " + innerPhone);
+    //   // delay(500);
+    //   sendATCommand("ATH", true);
 
-        // String smska = "W: ";
-        // smska += String(sensors.kg, 1);
-        // smska += " Kg\n";
-        // // smska += "\n";
-        // smska += "T1:" + String(sensors.dsT, 1) + "\n";
-        // // smska += String(sensors.dsT, 1);
-        // // smska += "\n";
-        // smska += "T2:" + String(sensors.bmeT, 1) + "\n";
-        // // smska += String(sensors.bmeT, 1);
-        // // smska += "\n";
-        // smska += "H:";
-        // smska += sensors.bmeH;
-        // smska += "\n";
-        // smska += "Pr:";
-        // smska += sensors.bmeP_mmHg;
-        // Serial.println(smska);
-        // sendSMS(innerPhone, smska); // смс
-        // delay(2000);
+    //   // delay(500);
+    //   // strcat(buf, "W:");
+    //   // dtostrf(sensors.kg, 3, 1, buf);
+    //   // strcat(buf, "kg\n");
+    //   // strcat(buf, "T1:");
+    //   // dtostrf(sensors.dsT, 3, 1, buf);
+    //   // strcat(buf, "\n");
+    //   // strcat(buf, "T2:");
+    //   // dtostrf(sensors.bmeT, 3, 1, buf);
+    //   // strcat(buf, "\n");
+    //   // strcat(buf, "H:");
+    //   // itoa(sensors.bmeH, buf + strlen(buf), DEC);
+    //   // strcat(buf, "\n");
+    //   // strcat(buf, "P:");
+    //   // itoa(sensors.bmeP_mmHg, buf + strlen(buf), DEC);
+    //   // Serial.println(buf);
 
-      // }
-    }
-    else
-      ST.HX711_Block = false;
-      xSemaphoreGive(uart_mutex);
+    //   // String smska = "W: ";
+    //   // smska += String(sensors.kg, 1);
+    //   // smska += " Kg\n";
+    //   // // smska += "\n";
+    //   // smska += "T1:" + String(sensors.dsT, 1) + "\n";
+    //   // // smska += String(sensors.dsT, 1);
+    //   // // smska += "\n";
+    //   // smska += "T2:" + String(sensors.bmeT, 1) + "\n";
+    //   // // smska += String(sensors.bmeT, 1);
+    //   // // smska += "\n";
+    //   // smska += "H:";
+    //   // smska += sensors.bmeH;
+    //   // smska += "\n";
+    //   // smska += "Pr:";
+    //   // smska += sensors.bmeP_mmHg;
+    //   // Serial.println(smska);
+    //   // sendSMS(innerPhone, smska); // смс
+    //   // delay(2000);
+
+    //   // }
+    // }
+    // else
+    //   ST.HX711_Block = false;
+    // xSemaphoreGive(uart_mutex);
   }
 }
 /*******************************************************************************************************/
@@ -1560,10 +1564,10 @@ void printPointer(uint8_t pointer)
 String waitResponse()
 {
   String _resp = "";
-  long _timeout = millis() + 10000;
-  while (!SIM800.available() && millis() < _timeout)
-  {
-  };
+  // long _timeout = millis() + 10000;
+  // while (!SIM800.available() && millis() < _timeout)
+  // {
+  // };
   if (SIM800.available())
   {
     _resp = SIM800.readString();
