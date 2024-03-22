@@ -16,7 +16,7 @@
 #define SET_PIN 18 // кнопкa Выбор
 #define PL_PIN 19  // кнопкa Плюс
 #define MN_PIN 5   // кнопкa Минус
-#define RELAY 23   // Реле
+
 #define DS_SNS 4   // ds18b20
 #define BAT 34     // Аккумулятор
 #define TX_PIN 17  // SIM800_TX
