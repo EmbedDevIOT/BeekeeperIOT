@@ -7,7 +7,6 @@
 #include "HardwareSerial.h"
 #include <EEPROM.h>
 #include <microDS3231.h>
-// #include "SoftwareSerial.h"
 #include <Wire.h>
 #include <GyverBME280.h>
 

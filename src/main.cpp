@@ -940,6 +940,7 @@ void DisplayHandler(uint8_t item)
 
   case Calib:
   {
+
     disp.clear();
     disp.setScale(2);
     disp.setCursor(0, 0);
@@ -960,6 +961,10 @@ void DisplayHandler(uint8_t item)
       {
         sensors.g_contain += 0.01;
 
+        sensors.units = scale.get_units(1);
+        sensors.kg = sensors.units / 1000;
+        sensors.kg = sensors.kg + sensors.g_contain;
+
         disp.clear();
         disp.setScale(2);
         disp.setCursor(0, 0);
@@ -968,13 +973,17 @@ void DisplayHandler(uint8_t item)
         disp.printf("  %0.2f  ", sensors.kg);
         // disp.printf("- %0.2f +", sensors.g_contain);
         disp.update();
-        Serial.printf("Calibration: %0.2f\r\n", sensors.g_contain);
+        Serial.printf("Calibration: %0.2f\r\n", sensors.kg);
       }
 
       if (btDWN.click())
       {
         sensors.g_contain -= 0.01;
 
+        sensors.units = scale.get_units(1);
+        sensors.kg = sensors.units / 1000;
+        sensors.kg = sensors.kg + sensors.g_contain;
+        
         disp.clear();
         disp.setScale(2);
         disp.setCursor(0, 0);
@@ -983,7 +992,7 @@ void DisplayHandler(uint8_t item)
         disp.printf("  %0.2f  ", sensors.kg);
         // disp.printf("- %0.2f +", sensors.g_contain);
         disp.update();
-        Serial.printf("Calibration: %0.2f\r\n", sensors.g_contain);
+        Serial.printf("Calibration: %0.2f\r\n", sensors.kg);
       }
 
       // Exit Set CAlibration and SAVE settings
