@@ -146,6 +146,7 @@ extern Flag ST;
 
 //============================================================================
 void SystemInit(void);     //  System Initialisation (variables and structure)
+void I2C_Scanning(void);
 void ShowInfoDevice(void); //  Show information or this Device
 void GetChipID(void);
 void CheckSystemState(void);
