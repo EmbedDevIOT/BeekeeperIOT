@@ -529,7 +529,7 @@ void loop()
 void Notification()
 {
   char buf[128] = "";
-  if (ST.SMS1 && Clock.hour == Config.UserSendTime1 && Clock.minute == 33 && Clock.second == 0)
+  if (ST.SMS1 && Clock.hour == Config.UserSendTime1 && Clock.minute == 30 && Clock.second == 0)
   {
     Serial.println("Send SMS1");
 
@@ -547,6 +547,9 @@ void Notification()
     strcat(buf, "\n");
     strcat(buf, "P:");
     itoa(sensors.bmeP_mmHg, buf + strlen(buf), DEC);
+    strcat(buf, "\n");
+    strcat(buf, "B:");
+    itoa(sensors.voltage, buf + strlen(buf), DEC);
 
     Serial.println(buf);
 
@@ -741,6 +744,9 @@ void IncommingRing()
         strcat(buf, "\n");
         strcat(buf, "P:");
         itoa(sensors.bmeP_mmHg, buf + strlen(buf), DEC);
+        strcat(buf, "\n");
+        strcat(buf, "B:");
+        itoa(sensors.voltage, buf + strlen(buf), DEC);
 
         Serial.println(buf);
         phoneindex = -1;
