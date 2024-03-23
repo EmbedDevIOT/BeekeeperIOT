@@ -36,6 +36,11 @@
 
 #define BAT_MIN 30
 
+// I2C Adress
+#define BME_ADR 0x76
+#define OLED_ADR 0x3C
+#define RTC_ADR 0x68
+
 //=======================================================================
 extern MicroDS3231 RTC;
 extern DateTime Clock;

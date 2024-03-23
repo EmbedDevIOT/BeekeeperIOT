@@ -24,11 +24,6 @@
 #define RX_PIN 16 // SIM800_RX
 #define HX_DT 25  // HX711_DT
 #define HX_CLK 26 // HX711_CLK
-
-// I2C Adress
-#define BME_ADR 0x76
-#define OLED_ADR 0x3C
-#define RTC_ADR 0x68
 //=======================================================================
 
 //============================== STRUCTURES =============================
@@ -40,8 +35,6 @@ Flag ST;
 //=======================================================================
 
 //============================ GLOBAL VARIABLES =========================
-String _response = "";
-
 uint8_t tim_sec = 0;
 uint32_t tmr1000 = 0;
 uint32_t tmr500 = 0;
@@ -64,8 +57,7 @@ GyverOLED<SSD1306_128x64> disp;
 // int frameCount = 4;
 
 // GyverOS<2> os;
-HX711 scale; //
-// HardwareSerial SIM800(1);
+HX711 scale; 
 MicroDS3231 RTC; // 0x68
 GyverBME280 bme; // 0x76
 Button btUP(PL_PIN, INPUT_PULLUP);
@@ -80,15 +72,12 @@ DallasTemperature ds18b20(&oneWire);
 //=======================================================================
 
 //================================ PROTOTIPs =============================
-void I2C_Scanning(void);
 void StartingInfo(void);
-void DisplayUPD(void);
 void ButtonHandler(void);
 void BeekeeperConroller(void);
 void DisplayHandler(uint8_t item);
 void printPointer(uint8_t pointer);
 void GetBatVoltage(void);
-void IncommingRing(void);
 void GetDSData(void);
 void GetBMEData(void);
 void GetWeight(void);
