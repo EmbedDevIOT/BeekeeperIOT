@@ -1,4 +1,5 @@
 #include "Config.h"
+#include "sim800.h"
 //=======================================================================
 
 //========================== DEFINITIONS ================================
@@ -41,10 +42,6 @@ Flag ST;
 //============================ GLOBAL VARIABLES =========================
 String _response = "";
 
-// uint32_t ADC_buff[4] = {0};
-
-// uint8_t task_counter = 0, task_cnt_10S = 0;
-// float Calibration_Factor_Of_Load_cell = 23850; //-31;
 uint8_t tim_sec = 0;
 uint32_t tmr1000 = 0;
 uint32_t tmr500 = 0;
@@ -68,7 +65,7 @@ GyverOLED<SSD1306_128x64> disp;
 
 // GyverOS<2> os;
 HX711 scale; //
-HardwareSerial SIM800(1);
+// HardwareSerial SIM800(1);
 MicroDS3231 RTC; // 0x68
 GyverBME280 bme; // 0x76
 Button btUP(PL_PIN, INPUT_PULLUP);
@@ -90,9 +87,6 @@ void ButtonHandler(void);
 void BeekeeperConroller(void);
 void DisplayHandler(uint8_t item);
 void printPointer(uint8_t pointer);
-String waitResponse(void);
-String sendATCommand(String cmd, bool waiting);
-void sendSMS(String phone, String message);
 void GetBatVoltage(void);
 void IncommingRing(void);
 void GetDSData(void);
@@ -112,12 +106,14 @@ void Task500ms()
 {
   if (millis() - tmr500 >= 500)
   {
-
     Clock = RTC.getTime();
+    Notification();
   }
   tmr500 += 500;
 }
+//=======================================================================
 
+//=======================================================================
 // Task every 1000ms (Get Voltage and Show Debug info)
 void Task1000ms()
 {
@@ -159,7 +155,9 @@ void Task1000ms()
     tim_sec++;
   }
 }
+//=======================================================================
 
+//=======================================================================
 void Task5s()
 {
   if (tim_sec == 5)
@@ -175,6 +173,7 @@ void Task5s()
     tim_sec = 0;
   }
 }
+//=======================================================================
 
 //========================================================================
 /*
@@ -485,19 +484,9 @@ void setup()
   Serial.println(F("Battery Init...Done"));
 
   // SIM800 INIT
-
-  delay(2000);
-  SIM800.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
-
-  sendATCommand("AT", true);
-  sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
-
-  _response = sendATCommand("AT+CMGF=1;&W", true);
-  _response = sendATCommand("AT+IFC=1, 1", true);
-  _response = sendATCommand("AT+CPBS=\"SM\"", true);
-  _response = sendATCommand("AT+CLIP=1", true); // AON Enable
-  _response = sendATCommand("AT+CNMI=1,2,2,1,0", true);
-  // delay(10);
+  delay(1000);
+  sim800_init(9600, 16, 17);
+  sim800_conf();
 
   disp.clear();
 
@@ -511,8 +500,6 @@ void setup()
 //=========================      M A I N       ===========================
 void loop()
 {
-  Notification();
-
   IncommingRing();
 
   if (!ST.Call_Block)
@@ -531,30 +518,10 @@ void Notification()
   char buf[128] = "";
   if (ST.SMS1 && Clock.hour == Config.UserSendTime1 && Clock.minute == 30 && Clock.second == 0)
   {
-    Serial.println("Send SMS1");
+    Serial.println("Send Notification: SMS1");
+    SendUserSMS();
 
-    strcat(buf, "W:");
-    dtostrf(sensors.kg, 3, 1, buf + strlen(buf));
-    strcat(buf, "kg\n");
-    strcat(buf, "T1:");
-    dtostrf(sensors.dsT, 3, 1, buf + strlen(buf));
-    strcat(buf, "\n");
-    strcat(buf, "T2:");
-    dtostrf(sensors.bmeT, 3, 1, buf + strlen(buf));
-    strcat(buf, "\n");
-    strcat(buf, "H:");
-    itoa(sensors.bmeH, buf + strlen(buf), DEC);
-    strcat(buf, "\n");
-    strcat(buf, "P:");
-    itoa(sensors.bmeP_mmHg, buf + strlen(buf), DEC);
-    strcat(buf, "\n");
-    strcat(buf, "B:");
-    itoa(sensors.voltage, buf + strlen(buf), DEC);
-
-    Serial.println(buf);
-
-    sendSMS(Config.phone, buf);
-    delay(2000);
+    delay(200);
 
     ST.SMS1 = false;
     ST.SMS2 = true;
@@ -562,7 +529,10 @@ void Notification()
 
   if (ST.SMS2 && Clock.hour == Config.UserSendTime2 && Clock.minute == 0 && Clock.second == 0)
   {
-    Serial.println("Send SMS2");
+    Serial.println("Send Notification: SMS2");
+    SendUserSMS();
+
+    delay(200);
     ST.SMS1 = true;
     ST.SMS2 = false;
   }
@@ -701,63 +671,6 @@ void ButtonHandler()
 
     Serial.printf("ptr:%d", disp_ptr);
     Serial.println();
-  }
-}
-/*******************************************************************************************************/
-
-/*******************************************************************************************************/
-void IncommingRing()
-{
-  if (SIM800.available())
-  {
-    _response = waitResponse();
-    _response.trim();
-    Serial.println(_response);
-
-    if (_response.startsWith("RING"))
-    {
-      ST.Call_Block = true;
-      char buf[128] = "";
-      int phoneindex = _response.indexOf("+CLIP: \"");
-      String innerPhone = "";
-
-      if (phoneindex >= 0)
-      {
-        phoneindex += 8;
-        innerPhone = _response.substring(phoneindex, _response.indexOf("\"", phoneindex));
-        Serial.println("Number: " + innerPhone);
-        delay(500);
-        sendATCommand("ATH", true);
-        delay(500);
-
-        strcat(buf, "W:");
-        dtostrf(sensors.kg, 3, 1, buf + strlen(buf));
-        strcat(buf, "kg\n");
-        strcat(buf, "T1:");
-        dtostrf(sensors.dsT, 3, 1, buf + strlen(buf));
-        strcat(buf, "\n");
-        strcat(buf, "T2:");
-        dtostrf(sensors.bmeT, 3, 1, buf + strlen(buf));
-        strcat(buf, "\n");
-        strcat(buf, "H:");
-        itoa(sensors.bmeH, buf + strlen(buf), DEC);
-        strcat(buf, "\n");
-        strcat(buf, "P:");
-        itoa(sensors.bmeP_mmHg, buf + strlen(buf), DEC);
-        strcat(buf, "\n");
-        strcat(buf, "B:");
-        itoa(sensors.voltage, buf + strlen(buf), DEC);
-
-        Serial.println(buf);
-        phoneindex = -1;
-        _response.clear();
-        ST.Call_Block = false;
-        sendATCommand("AT+CMGDA=\"DEL ALL\"", true);
-
-        // sendSMS(innerPhone, buf); // смс
-        // delay(2000);
-      }
-    }
   }
 }
 /*******************************************************************************************************/
@@ -1403,12 +1316,6 @@ void DisplayHandler(uint8_t item)
     break;
   }
 
-  case Battery:
-  {
-
-    break;
-  }
-
   default:
     break;
   }
@@ -1418,53 +1325,6 @@ void printPointer(uint8_t pointer)
 {
   disp.setCursor(0, pointer);
   disp.print(">");
-}
-/*******************************************************************************************************/
-
-/*******************************************************************************************************/
-String waitResponse()
-{
-  String _resp = "";
-  long _timeout = millis() + 10000;
-  while (!SIM800.available() && millis() < _timeout)
-  {
-  };
-  if (SIM800.available())
-  {
-    _resp = SIM800.readString();
-  }
-  else
-  {
-    Serial.println("Timeout...");
-  }
-  return _resp;
-}
-/*******************************************************************************************************/
-
-/*******************************************************************************************************/
-String sendATCommand(String cmd, bool waiting)
-{
-  String _resp = "";
-  Serial.println(cmd);
-  SIM800.println(cmd);
-  if (waiting)
-  {
-    _resp = waitResponse();
-    if (_resp.startsWith(cmd))
-    {
-      _resp = _resp.substring(_resp.indexOf("\r", cmd.length()) + 2);
-    }
-    Serial.println(_resp);
-  }
-  return _resp;
-}
-/*******************************************************************************************************/
-
-/*******************************************************************************************************/
-void sendSMS(String phone, String message)
-{
-  sendATCommand("AT+CMGS=\"" + phone + "\"", true);
-  sendATCommand(message + "\r\n" + (String)((char)26), true); // 26
 }
 /*******************************************************************************************************/
 
