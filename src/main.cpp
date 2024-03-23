@@ -57,7 +57,7 @@ GyverOLED<SSD1306_128x64> disp;
 // int frameCount = 4;
 
 // GyverOS<2> os;
-HX711 scale; 
+HX711 scale;
 MicroDS3231 RTC; // 0x68
 GyverBME280 bme; // 0x76
 Button btUP(PL_PIN, INPUT_PULLUP);
@@ -156,6 +156,8 @@ void Task5s()
       GetBatVoltage();
       GetBMEData();
       GetDSData();
+      GetLevel();
+
       if (ST.Calibration == EEP_DONE)
         GetWeight();
     }
@@ -422,7 +424,7 @@ void StartingInfo()
 void setup()
 {
   // Firmware version
-  Config.firmware = "0.9.8";
+  Config.firmware = "0.9.8b";
   // UART Init
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -483,6 +485,7 @@ void setup()
   GetBMEData();
   GetDSData();
   GetWeight();
+  GetLevel();
 
   disp.update();
 }
@@ -1372,9 +1375,11 @@ void ShowDBG()
   Serial.println(message);
   sprintf(message, "BAT: %003d", sensors.voltage);
   Serial.println(message);
-  sprintf(message, "EEPROM: SMS_1 %02d | SMS_2 %02d", Config.UserSendTime1, Config.UserSendTime2);
+  sprintf(message, "SIM800 Signal: %d", sensors.signal);
   Serial.println(message);
 
+  sprintf(message, "EEPROM: SMS_1 %02d | SMS_2 %02d", Config.UserSendTime1, Config.UserSendTime2);
+  Serial.println(message);
   sprintf(message, "EEPROM: Phone: %s", Config.phone);
   Serial.println(message);
 

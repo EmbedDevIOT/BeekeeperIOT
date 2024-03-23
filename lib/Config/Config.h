@@ -120,6 +120,7 @@ struct SNS
   float g_eep = 2.31;
   float grms = 10.5;
   float g_contain = 0.0; // Save and Reading from EEPROM
+  int signal = 0;
   uint32_t voltage = 0;
 };
 extern SNS sensors;

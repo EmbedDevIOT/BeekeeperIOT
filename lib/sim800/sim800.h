@@ -9,5 +9,6 @@ String waitResponse();
 String sendATCommand(String cmd, bool waiting);
 void IncommingRing();
 void SendUserSMS();
+void GetLevel();
 
 #endif 
