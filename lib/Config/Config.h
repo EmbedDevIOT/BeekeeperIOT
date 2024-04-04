@@ -57,14 +57,17 @@ enum menu
   Battery
 };
 
-// MAPing EEPROM
-enum eep_map
+//EEPROM
+struct EEP_D
 {
-  ADR_CALIB_OK = 0,
-  ADR_CALIB = 1,
-  ADR_F_START_OK = ADR_CALIB + 4,
-  ADR_CONTAIN = 6
+  uint8_t st_cal = 0; 
+  float cal_f = 0.0;  
+  int32_t avr = 0;
+  int8_t t1_sms = 0;
+  int8_t t2_sms = 0;
+  int8_t num[10] = {0};
 };
+extern EEP_D _eep;
 
 //=======================================================================
 
@@ -75,22 +78,19 @@ struct GlobalConfig
 
   String phone = ""; // номер телефона в международном формате
   uint16_t iso_code = 7;
-  uint8_t phoneNumber[10] = {0}; // номер телефона в международном формате
+  // uint8_t phoneNumber[10] = {0}; // номер телефона в международном формате
 
   String firmware = ""; // accepts from setup()
   // System_Information
-  String fwdate = "24.02.2024";
+  String fwdate = "04.04.2024";
   String chipID = "";
   String MacAdr = "";
 
   String APSSID = "Beekeeper";
   String APPAS = "12345678";
 
-  int8_t UserSendTime1 = 9;
-  int8_t UserSendTime2 = 20;
-
-  byte WiFiMode = 0; // Режим работы WiFi
-  // long WiFiPeriod = 0;
+  int8_t UserSendTime1 = 0;
+  int8_t UserSendTime2 = 0;
 };
 extern GlobalConfig Config;
 //=======================================================================
@@ -106,6 +106,7 @@ extern SYTM System;
 
 struct SNS
 {
+  int signal = 0;
   float dsT = 0.0;     // Temperature DS18B20
   float bmeT = 0.0;    // Temperature BME280
   int bmeH = 0.0;      // Humidity   BME280
@@ -113,28 +114,15 @@ struct SNS
   float bmeA = 0.0;    // Altitude   BME280 m
   float bmeP_hPa = 0;  // Pressure   BME280 hPa
   int bmeP_mmHg = 0;   // Pressure   BME280 mmHg
-  float calib = 23.38; // Save and Reading from EEPROM
+  float calib = 0.0; // Save and Reading from EEPROM
   float units = 0.0;
   float kg = 0.0;
-  float g_eep = 2.31;
   float grms = 10.5;
-  float g_contain = 0.0; // Save and Reading from EEPROM
-  int signal = 0;
+  uint32_t averange = 0;
   uint32_t voltage = 0;
 };
 extern SNS sensors;
 //=======================================================================
-struct EEP_Data
-{
-  uint8_t st_cal = 0;
-  uint8_t st_fstart = 0;
-  float calibr_factor = 0.0;
-  float g_contain = 0.0;
-  int8_t t1_sms = 0;
-  int8_t t2_sms = 0;
-  int8_t num[10] = {9, 5, 0, 6, 0, 4, 5, 5, 6, 5};
-};
-extern EEP_Data eep_data;
 //=======================================================================
 struct Flag
 {
