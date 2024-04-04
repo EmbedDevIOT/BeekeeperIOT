@@ -33,6 +33,8 @@ EEP_D _eep;
 //=======================================================================
 
 //============================ GLOBAL VARIABLES =========================
+uint32_t block_timer = 0;
+uint8_t t_sec = 0;
 uint8_t tim_sec = 0;
 uint32_t tmr1000 = 0;
 uint32_t tmr500 = 0;
@@ -99,6 +101,16 @@ void Task1000ms()
   if (millis() - tmr1000 >= 1000)
   {
     Clock = RTC.getTime();
+
+    // 1 Min Timer
+    if (t_sec < 59)
+      t_sec++;
+    else
+    {
+      t_sec = 0;
+      block_timer++;
+    }
+
     if (System.DispState)
     {
       DisplayHandler(System.DispMenu);
@@ -195,8 +207,13 @@ void EEPROM_Init()
   {
     Serial.println(F("Set Default Preset"));
     _eep.st_cal = 200;
-    _eep.cal_f = -0.830;
-    _eep.avr = -270985;
+    _eep.cal_f = 0.824;
+    _eep.avr = -54200;
+    _eep.num[10] = {0};
+    _eep.t1_sms = 9;
+    _eep.t2_sms = 18;
+    // _eep.cal_f = -0.830;
+    // _eep.avr = -270985;
 
     EEPROM.put(0, _eep);
     EEPROM.commit();
@@ -228,10 +245,10 @@ void EEPROM_Init()
   }
   Serial.printf("EEPROM: SMS_2: %02d \r\n", Config.UserSendTime2);
 
-  // protect to 255
+  // protect to 255 or negative value
   for (uint8_t i = 0; i < 10; i++)
   {
-    if (_eep.num[i] > 9)
+    if (_eep.num[i] > 9 || _eep.num[i] < 0)
     {
       _eep.num[i] = 0;
     }
@@ -346,14 +363,16 @@ void setup()
 //=========================      M A I N       ===========================
 void loop()
 {
-  IncommingRing();
-
-  if (!ST.Call_Block)
+  if (block_timer != 20)
   {
-    ButtonHandler();
-    Task500ms();
-    Task1000ms();
-    Task5s();
+    if (!ST.Call_Block)
+    {
+      ButtonHandler();
+      Task500ms();
+      Task1000ms();
+      Task5s();
+    }
+  IncommingRing();
   }
 }
 //========================================================================
@@ -489,10 +508,9 @@ void ButtonHandler()
 
     sensors.averange = scale.read_average();
     _eep.avr = sensors.averange;
+    Serial.printf("Averange: %d \r\n", sensors.averange);
 
     scale.set_offset(sensors.averange);
-    Serial.printf("Averange:");
-    Serial.println(sensors.averange);
 
     EEPROM.put(0, _eep);
     EEPROM.commit();
@@ -809,7 +827,7 @@ void DisplayHandler(uint8_t item)
 
         if (btUP.click())
         {
-          sensors.calib -= 0.01;
+          sensors.calib += 0.01;
           _eep.cal_f = sensors.calib;
 
           Serial.printf("C:%0.4f \r\n", sensors.calib);
@@ -1279,6 +1297,8 @@ void ShowDBG()
   sprintf(message, "EEPROM: SMS_1 %02d | SMS_2 %02d", Config.UserSendTime1, Config.UserSendTime2);
   Serial.println(message);
   sprintf(message, "EEPROM: Phone: %s", Config.phone);
+  Serial.println(message);
+  sprintf(message, "Block Timer: %d", block_timer);
   Serial.println(message);
 
   Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
