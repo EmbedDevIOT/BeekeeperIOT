@@ -207,13 +207,13 @@ void EEPROM_Init()
   {
     Serial.println(F("Set Default Preset"));
     _eep.st_cal = 200;
-    _eep.cal_f = 0.824;
-    _eep.avr = -54200;
+    _eep.cal_f = -0.830;
+    _eep.avr = -270985;
+    // _eep.cal_f = 0.824;
+    // _eep.avr = -54200;
     _eep.num[10] = {0};
     _eep.t1_sms = 9;
     _eep.t2_sms = 18;
-    // _eep.cal_f = -0.830;
-    // _eep.avr = -270985;
 
     EEPROM.put(0, _eep);
     EEPROM.commit();
@@ -304,7 +304,7 @@ void StartingInfo()
 void setup()
 {
   // Firmware version
-  Config.firmware = "1.0.2";
+  Config.firmware = "1.0.3";
   // UART Init
   Serial.begin(UARTSpeed);
   Serial1.begin(MODEMSpeed);
@@ -559,7 +559,7 @@ void GetDSData()
 void GetWeight()
 {
   scale.set_scale(sensors.calib);
-  sensors.units = scale.get_units();
+  sensors.units = scale.get_units(10);
   sensors.grms = (sensors.units * 0.035274);
   sensors.kg = float(sensors.grms / 1000);
   sensors.kg = constrain(sensors.kg, 0.0, 200.0);

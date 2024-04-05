@@ -142,14 +142,13 @@ void SendUserSMS()
     strcat(buf, "Сигнал: ");
     itoa(sensors.signal, buf + strlen(buf), DEC);
     strcat(buf, " %\n");
-    
+
 #ifdef DEBUG
     Serial.printf("MSG:");
     Serial.println(buf);
     Serial.printf("lenght:%d", strlen(buf));
     Serial.println();
 #endif
-#ifndef DEBUG
+
     sendSMS(Config.phone, buf);
-#endif
 }
