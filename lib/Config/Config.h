@@ -78,7 +78,6 @@ struct GlobalConfig
 
   String phone = ""; // номер телефона в международном формате
   uint16_t iso_code = 7;
-  // uint8_t phoneNumber[10] = {0}; // номер телефона в международном формате
 
   String firmware = ""; // accepts from setup()
   // System_Information
@@ -114,7 +113,7 @@ struct SNS
   float bmeA = 0.0;    // Altitude   BME280 m
   float bmeP_hPa = 0;  // Pressure   BME280 hPa
   int bmeP_mmHg = 0;   // Pressure   BME280 mmHg
-  float calib = 0.0; // Save and Reading from EEPROM
+  float calib = 0.0;   // Save and Reading from EEPROM
   float units = 0.0;
   float kg = 0.0;
   float grms = 10.5;
@@ -142,8 +141,5 @@ void SystemInit(void);     //  System Initialisation (variables and structure)
 void I2C_Scanning(void);
 void ShowInfoDevice(void); //  Show information or this Device
 void GetChipID(void);
-void CheckSystemState(void);
-void DebugControl(void);
-void SystemFactoryReset(void);
 //============================================================================
 #endif // _Config_H
