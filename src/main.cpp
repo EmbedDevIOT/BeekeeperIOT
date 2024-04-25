@@ -3,20 +3,19 @@
 //=======================================================================
 
 //========================== DEFINITIONS ================================
-#define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP 5        /* Time ESP32 will go to sleep (in seconds) */
+#define uS_TO_S_FACTOR 1000000 
+#define TIME_TO_SLEEP 5       
 
-// #define EB_CLICK_TIME 100 // Button timeout
 #define DISP_TIME (tmrMin == 10 && tmrSec == 0)
 #define ITEMS 5 // Main Menu Items
 
 // GPIO PINs
-#define SET_PIN 18 // кнопкa Выбор
-#define PL_PIN 19  // кнопкa Плюс
-#define MN_PIN 5   // кнопкa Минус
+#define SET_PIN 18 // button SET
+#define PL_PIN 19  // button UP
+#define MN_PIN 5   // button DOWN
 
 #define DS_SNS 4  // ds18b20
-#define BAT 34    // Аккумулятор
+#define BAT 34    // Battery Pin
 #define TX_PIN 17 // SIM800_TX
 #define RX_PIN 16 // SIM800_RX
 #define HX_DT 25  // HX711_DT
@@ -33,8 +32,8 @@ EEP_D _eep;
 //=======================================================================
 
 //============================ GLOBAL VARIABLES =========================
-uint32_t block_timer = 0;
-uint8_t t_sec = 0;
+RTC_DATA_ATTR int bootCount = 0;
+
 uint8_t tim_sec = 0;
 uint32_t tmr1000 = 0;
 uint32_t tmr500 = 0;
@@ -47,12 +46,9 @@ uint8_t disp_ptr = 0;
 bool st = false; // menu state ()selection
 
 char charPhoneNumber[11];
-
-RTC_DATA_ATTR int bootCount = 0;
 //================================ OBJECTs =============================
-#define OLED_SOFT_BUFFER_64 // MCU buffer
+#define OLED_SOFT_BUFFER_64
 GyverOLED<SSD1306_128x64> disp;
-
 HX711 scale;
 MicroDS3231 RTC; // 0x68
 GyverBME280 bme; // 0x76
@@ -60,10 +56,8 @@ Button btUP(PL_PIN, INPUT_PULLUP);
 Button btSET(SET_PIN, INPUT_PULLUP);
 Button btDWN(MN_PIN, INPUT_PULLUP);
 VirtButton btVirt;
-// Dallas Themperature sensor DS18b20
 OneWire oneWire(DS_SNS);
 DallasTemperature ds18b20(&oneWire);
-
 //=======================================================================
 
 //================================ PROTOTIPs =============================
@@ -102,15 +96,6 @@ void Task1000ms()
   {
     Clock = RTC.getTime();
 
-    // 1 Min Timer
-    if (t_sec < 59)
-      t_sec++;
-    else
-    {
-      t_sec = 0;
-      block_timer++;
-    }
-
     if (System.DispState)
     {
       DisplayHandler(System.DispMenu);
@@ -139,12 +124,9 @@ void Task1000ms()
 
 #ifdef DEBUG
     if (ST.debug)
-    {
       ShowDBG();
-    }
 #endif
     tmr1000 += 1000;
-    tim_sec++;
   }
 }
 //=======================================================================
@@ -272,28 +254,19 @@ void EEPROM_Init()
 void StartingInfo()
 {
   char msg[32];
-  disp.clear(); // очистка
-
-  disp.setScale(2); // масштаб текста (1..4)
+  disp.clear();
+  disp.setScale(2);
   disp.setCursor(10, 3);
   sprintf(msg, "Beekeeper");
   disp.print(msg);
   Serial.println(msg);
-
   disp.setScale(1);
   disp.setCursor(20, 7);
   sprintf(msg, "firmware:%s", Config.firmware);
   disp.print(msg);
   Serial.println(msg);
-
   disp.update();
   delay(1000);
-
-  // disp.clear();
-  // disp.drawBitmap(9, 16, logo_32x29, 32, 29, BITMAP_NORMAL, BUF_ADD);
-
-  // disp.update();
-  // delay(2000);
 
   disp.clear();
 }
@@ -362,21 +335,18 @@ void setup()
 //=========================      M A I N       ===========================
 void loop()
 {
-  if (block_timer != 20)
+  if (!ST.Call_Block)
   {
-    if (!ST.Call_Block)
-    {
-      ButtonHandler();
-      Task500ms();
-      Task1000ms();
-      Task5s();
-    }
-  IncommingRing();
+    ButtonHandler();
+    Task500ms();
+    Task1000ms();
+    Task5s();
   }
+  IncommingRing();
 }
-//========================================================================
+/*******************************************************************************************************/
 
-//========================================================================
+/*******************************************************************************************************/
 void Notification()
 {
   char buf[128] = "";
@@ -401,9 +371,9 @@ void Notification()
     ST.SMS2 = false;
   }
 }
-//========================================================================
+/*******************************************************************************************************/
 
-//========================================================================
+/*******************************************************************************************************/
 void ButtonHandler()
 {
   uint16_t value = 0;
@@ -515,7 +485,7 @@ void ButtonHandler()
     EEPROM.commit();
     delay(1000);
 
-    ST.HX711_Block = false; // block task0;
+    ST.HX711_Block = false; // block 
     disp.clear();
   }
 
@@ -580,7 +550,6 @@ void DisplayHandler(uint8_t item)
         "  Время:\r\n"
         "  Калибровка:\r\n"
         "  Оповещения:\r\n"
-        // "  Аккумулятор:\r\n"
         "  Номер СМС:\r\n"
         "  Выход:\r\n"));
 
@@ -1200,7 +1169,7 @@ void DisplayHandler(uint8_t item)
     EEPROM.put(0, _eep);
     EEPROM.commit();
 
-    Config.phone.clear(); // Clear String
+    Config.phone.clear(); 
     Config.phone += '+';
     Config.phone += Config.iso_code;
     Config.phone += charPhoneNumber;
@@ -1228,6 +1197,7 @@ void DisplayHandler(uint8_t item)
   }
 }
 /*******************************************************************************************************/
+
 void printPointer(uint8_t pointer)
 {
   disp.setCursor(0, pointer);
@@ -1236,6 +1206,7 @@ void printPointer(uint8_t pointer)
 /*******************************************************************************************************/
 
 /*******************************************************************************************************/
+// Read battery voltage
 void GetBatVoltage(void)
 {
   uint32_t _mv = 0;
@@ -1251,8 +1222,6 @@ void GetBatVoltage(void)
     _mv += analogReadMilliVolts(BAT);
   }
   _mv = _mv / 12;
-
-  // Serial.println(_mv);
 
   if (_mv == 0 || _mv < min)
   {
@@ -1271,15 +1240,14 @@ void GetBatVoltage(void)
 }
 /*******************************************************************************************************/
 
+/*******************************************************************************************************/
+// Debug info
 void ShowDBG()
 {
   char message[52];
-
   Serial.println(F("!!!!!!!!!!!!!!  DEBUG INFO  !!!!!!!!!!!!!!!!!!"));
-
   sprintf(message, "DISP:%d | ML %d | P: %d T: %02d:%02d ", System.DispState, System.DispMenu, disp_ptr, tmrMin, tmrSec);
   Serial.println(message);
-
   sprintf(message, "TimeRTC: %02d:%02d:%02d", Clock.hour, Clock.minute, Clock.second);
   Serial.println(message);
   sprintf(message, "T_DS:%0.2f *C", sensors.dsT);
@@ -1292,17 +1260,14 @@ void ShowDBG()
   Serial.println(message);
   sprintf(message, "SIM800 Signal: %d", sensors.signal);
   Serial.println(message);
-
   sprintf(message, "EEPROM: SMS_1 %02d | SMS_2 %02d", Config.UserSendTime1, Config.UserSendTime2);
   Serial.println(message);
   sprintf(message, "EEPROM: Phone: %s", Config.phone);
   Serial.println(message);
-  sprintf(message, "Block Timer: %d", block_timer);
-  Serial.println(message);
-
   Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
   Serial.println();
 }
+/*******************************************************************************************************/
 
 /* Method to print the reason by which ESP32
 has been awaken from sleep
