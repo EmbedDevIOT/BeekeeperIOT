@@ -253,7 +253,6 @@ void EEPROM_Init()
       _eep.num[i] = 0;
     }
   }
-
   // Set string User Phone Number
   for (int i = 0; i < 10; i++)
   {
